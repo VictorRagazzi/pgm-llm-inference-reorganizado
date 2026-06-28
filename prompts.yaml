@@ -1,0 +1,1531 @@
+prompts:
+  few_shot: |
+    You are performing probabilistic inference in a Bayesian Network.
+
+    Each domain value represents a mutually exclusive hypothesis.
+    Your task is to choose the MOST PROBABLE hypothesis
+    given the observed evidence.
+
+    --- EXAMPLES ---
+
+    Example 1:
+    Target variable: Disease_Severity
+    Domain: ["none", "mild", "severe"]
+    Parents: ["Infection"]
+    Evidence: {}
+
+    Interpretation:
+    With no evidence of infection,
+    the most probable state is "none".
+
+    Output:
+    {{
+      "variable": "Disease_Severity",
+      "value": "none"
+    }}
+
+    Example 2:
+    Target variable: Disease_Severity
+    Domain: ["none", "mild", "severe"]
+    Parents: ["Infection"]
+    Evidence: {"Infection": "confirmed"}
+
+    Interpretation:
+    Infection increases probability of disease,
+    but "severe" is still less likely than "mild".
+
+    Output:
+    {{
+      "variable": "Disease_Severity",
+      "value": "mild"
+    }}
+
+    Example 3:
+    Target variable: Weather
+    Domain: ["clear", "rain", "storm"]
+    Parents: ["Clouds"]
+    Evidence: {}
+
+    Output:
+    {{
+      "variable": "Weather",
+      "value": "clear"
+    }}
+
+    --- NOW SOLVE ---
+
+    Target variable: {variable}
+    Domain: {domain}
+    Parents: {{parents}}
+
+    Observed evidence:
+    {evidence_block}
+
+    Additional context:
+    {related_block}
+
+    RULES:
+    - Select the value with highest posterior probability.
+    - Do NOT default to conservative or neutral states.
+    - Do NOT explain your reasoning.
+    - Use only the variable domain.
+
+    Output ONLY JSON matching:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>"
+    }}
+    
+  cot: |
+    You are a local causal inference component in a graphical model.
+
+    INTERNAL POLICY:
+    - You MAY reason step-by-step internally.
+    - You MUST NEVER reveal your reasoning, assumptions, or intermediate steps.
+
+    TASK:
+    Determine the MOST PROBABLE value of the target variable
+    given the observed evidence.
+
+    INFERENCE CONSTRAINTS:
+    - Use ONLY information from the target variable and its parent variables.
+    - Children and other variables may appear in the context, but MUST NOT directly influence the decision.
+    - All domain values are mutually exclusive.
+
+    PROBABILITY PRINCIPLES:
+    - Select the value that maximizes the local posterior probability.
+    - Strong, direct parent evidence may override base frequency.
+    - Weak or ambiguous evidence defaults to the most common value.
+    - Rare values require strong and specific parent support.
+    - Confidence reflects ONLY the strength and consistency of parent evidence.
+    - Confidence must NOT depend on the size of the domain or general world knowledge.
+
+    Target variable: {variable}
+    Domain of target: {domain}
+
+    Parent variables:
+    {parents}
+
+    Observed evidence:
+    {evidence_block}
+
+    Additional local context (non-causal):
+    {related_block}
+
+    STRICT OUTPUT FORMAT:
+    You MUST include your step-by-step causal analysis inside the "internal_reasoning" field of the JSON (mandatory):
+
+    {{
+      "internal_reasoning": "Detailed causal analysis, including how you handled parents without direct evidence...",
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>"
+      "confidence":  "<high | medium | low>"
+    }}
+
+    Confidence levels:
+    - "high" → strong evidence and clear causal support.
+    - "medium" → moderate evidence, some ambiguity or inferred parent states.
+    - "low" → weak evidence or conflicting signals.
+
+    No explanation.
+    No uncertainty.
+    No additional text.
+
+  simple: |
+    You are a local causal inference module. Operate deterministically and with attention to uncertainty.
+
+    BACKGROUND CONTEXT (DATASET-LEVEL PRIOR):
+    {context}
+
+    This context provides general background and typical patterns.
+    It must NOT override direct parent evidence.
+
+    TASK:
+    Select the SINGLE MOST PLAUSIBLE value of the target variable given the observed parent evidence.
+
+    USE ONLY:
+    - the target variable
+    - its parent variables
+    - the observed values of those parents
+    - qualitative base frequency assumptions, if evidence is weak
+
+    ROLE CONSTRAINTS:
+    - You are NOT a storyteller or diagnostician.
+    - Focus only on local inference using parent evidence.
+    - NEVER consider children, siblings, or descendants.
+
+    DECISION RULES:
+    1. If the target variable is observed, return it with confidence="high".
+    2. Rare or extreme values remain rare; select only if parent evidence clearly supports it.
+    3. If evidence strongly favors a value, select it with confidence="high".
+    4. If evidence partially favors a value, select it with confidence="medium".
+    5. If evidence is weak, missing, ambiguous, or conflicting, select a plausible value but assign confidence="low".
+    6. You must COPY one value from the domain.
+    7. Internal reasoning is allowed to determine confidence; do NOT explain reasoning in output.
+
+    STRICT DOMAIN RULE:
+    - You MUST select a value ONLY from the domain listed.
+    - Selecting a value outside the domain is NOT allowed and is always invalid.
+    - If unsure, pick the most plausible value from the domain.
+
+    Target variable: {variable}
+
+    Parent variables:
+    {parents}
+
+    Domain of target (COPY-ONLY LIST):
+    {domain}
+
+    Observed evidence:
+    {evidence_block}
+
+    STRICT OUTPUT FORMAT:
+    Return EXACTLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    No explanation.
+    No additional text.
+
+  cot_with_confidence: |
+    You are a local causal inference component in a graphical model. Operate deterministically and with attention to uncertainty.
+
+    INTERNAL POLICY:
+    - You MAY reason step-by-step internally.
+    - You MUST NEVER reveal your reasoning, assumptions, or intermediate steps.
+
+    TASK:
+    Determine the MOST PROBABLE value of the target variable
+    given the observed parent evidence.
+
+    INFERENCE CONSTRAINTS:
+    - Use ONLY information from the target variable and its parent variables.
+    - Children and other variables may appear in the context,
+      but MUST NOT influence the decision.
+    - All domain values are mutually exclusive.
+
+    LOCAL INFERENCE PRINCIPLES:
+    1. Select the value that best fits the observed parent evidence,
+      approximating the highest local posterior plausibility.
+    2. Strong, direct, and consistent parent evidence => confidence="high".
+    3. Evidence that partially supports the value, or has minor contradictions => confidence="medium".
+    4. Weak, indirect, ambiguous, or conflicting evidence => confidence="low".
+    5. Rare or extreme values require multiple, specific, and non-contradictory parent signals.
+    6. Never invent values outside the given domain.
+
+    CONFIDENCE ASSIGNMENT:
+    - Reflects ONLY the strength, consistency, and specificity of parent evidence supporting the selected value.
+    - Must NOT depend on:
+      - domain size
+      - global world knowledge
+      - narrative coherence
+      - or confidence in other variables
+
+    Target variable: {variable}
+    Domain of target: {domain}
+
+    Parent variables:
+    {parents}
+
+    Observed evidence:
+    {evidence_block}
+
+    Additional local context (non-causal):
+    {related_block}
+
+    STRICT OUTPUT FORMAT:
+    Return ONLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    No explanation.
+    No uncertainty.
+    No additional text.
+
+    Instruction:
+    You are an expert Bayesian Reasoner. Your task is to estimate the most probable state of a "Target Variable" given the observed states of its "Parent Variables". Use your internal semantic knowledge about how these concepts relate in the real world.
+
+    ### CONSTRAINTS:
+    1. Use ONLY the information from the Parent Variables to decide the Target Variable's value.
+    2. Consider real-world base frequencies (priors): choose a rare value only if the evidence from parents is compelling.
+    3. You must provide a brief reasoning followed by the final answer in JSON format.
+
+    ### TASK DATA:
+    - Target Variable: "{variable}"
+    - Domain (Possible Values): {domain}
+    - Parent Variables (Causes): {parents}
+    - Observed Evidence (Parent States): {evidence_block}
+
+    ### RESPONSE FORMAT:
+    Explain your causal logic in one or two sentences under "REASONING", then provide the result under "RESULT" in a valid JSON block.
+
+    ### RESPONSE:
+    REASONING: [Your brief causal analysis here]
+    RESULT:
+    {{
+      "variable": "{variable}",
+      "value": "<selected_value_from_domain>"
+    }}
+
+    You are a local probabilistic inference module in a causal graphical model.
+
+    TASK:
+    Select the SINGLE MOST LIKELY value (local MAP) of the target variable.
+
+    DECISION BASIS:
+    You MUST decide using ONLY:
+    - the target variable
+    - its parent variables
+    - the observed values of those parents
+
+    CORE PRINCIPLES:
+    - Prefer the value that is most causally consistent with the observed parents.
+    - Do NOT assume real-world base frequencies unless they are implied by the causal relation.
+    - Values are not equally likely by default.
+    - Rare values MAY be selected if the parent configuration plausibly supports them.
+
+    STRICT RULES:
+    1. If the target variable is already observed, return the observed value immediately.
+    2. ONLY parent variables may influence the decision.
+      Ignore children, siblings, descendants, and any global narrative.
+    3. Select exactly ONE value from the given domain.
+    4. Never invent values outside the given domain.
+    5. Do NOT explain, justify, or describe reasoning.
+
+    Target variable: {variable}
+    Parent variables:
+    {parents}
+    Domain of target: {domain}
+
+    Observed evidence:
+    {evidence_block}
+
+    Local related variables (non-causal, do NOT use):
+    {related_block}
+
+    Return EXACTLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>",
+    }}
+
+    You are a local causal inference component in a Bayesian network.
+
+    INTERNAL POLICY:
+    - You MAY reason step-by-step internally.
+    - You MUST NEVER reveal your reasoning, assumptions, or intermediate steps.
+
+    TASK:
+    Determine the SINGLE MOST PROBABLE value (local MAP) of the target variable
+    given the observed parent variables.
+
+    INFERENCE CONSTRAINTS:
+    - Use ONLY the target variable and its parent variables.
+    - Ignore children, descendants, siblings, and any global interpretation.
+    - All domain values are mutually exclusive.
+
+    PROBABILISTIC PRINCIPLES:
+    - Select the value that best explains the observed parent configuration.
+    - Prefer causal consistency over generic frequency.
+    - Rare values may be selected if they are causally justified by the parents.
+    - Do NOT default to the most common value unless no causal signal is present.
+
+    RULES:
+    1. If the target variable is already observed, return the observed value.
+    2. Select exactly ONE value from the domain.
+    3. Never invent values outside the domain.
+    4. Do NOT explain or qualify the answer.
+
+    Target variable: {variable}
+    Domain of target: {domain}
+
+    Parent variables:
+    {parents}
+
+    Observed evidence:
+    {evidence_block}
+
+    Additional local context (non-causal, do NOT use):
+    {related_block}
+
+    STRICT OUTPUT FORMAT:
+    Return ONLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>"
+    }}
+
+    You are asked to decide the value of a variable in a causal model.
+
+    Target variable:
+    - {variable}
+
+    Possible values (domain):
+    - {domain}
+
+    Parents of the target variable:
+    {parents}
+
+    {evidence_block}
+
+    Related variables in the same causal factor:
+    {related_block}
+
+    Task:
+    Choose exactly ONE value from the domain for the target variable.
+    Base your decision only on the parents and the evidence shown above.
+    Other values in the domain should be considered less plausible.
+
+    Important rules:
+    - Do NOT invent new values.
+    - Do NOT explain your reasoning.
+    - Answer with a single value from the domain.
+
+    STRICT OUTPUT FORMAT:
+    Return ONLY:
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>"
+    }}
+
+  step_by_step: |
+    You are a local causal inference component in a graphical model.
+
+    INTERNAL REASONING POLICY:
+    - You MUST perform an internal step-by-step reasoning process.
+    - You MUST NOT reveal any reasoning, assumptions, or intermediate thoughts.
+
+    TASK:
+    Select the SINGLE MOST PLAUSIBLE value of the target variable
+    given the observed evidence.
+
+    INTERNAL THINKING PROCESS (MANDATORY, INTERNAL):
+
+    - For EACH possible value in the target variable domain:
+      - Temporarily assume this value is the true value.
+      - Consider whether this assumption is reasonable given the observed parent evidence.
+      - Check if any parent evidence strongly contradicts this assumption.
+      - Remember that parent evidence may be noisy or incomplete, so avoid rejecting
+        a value unless contradictions are strong and direct.
+
+    - After all values have been considered:
+      - Compare how well each value fits the observed evidence.
+      - Prefer values supported by most parent signals.
+      - Be conservative with rare or extreme values unless evidence clearly supports them.
+
+    - If no value is clearly favored:
+      - Select the most common real-world value in the domain.
+
+    INFERENCE CONSTRAINTS:
+    - Use ONLY the target variable and its parent variables.
+    - Ignore children, siblings, descendants, and any global narrative.
+    - Domain values are mutually exclusive.
+
+    Target variable: {variable}
+    Domain of target: {domain}
+
+    Parent variables:
+    {parents}
+
+    Observed evidence:
+    {evidence_block}
+
+    STRICT OUTPUT FORMAT:
+    Return ONLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>"
+    }}
+
+    No explanation.
+    No uncertainty.
+    No additional text.
+
+    You are a local causal inference component in a graphical model.
+
+    INTERNAL REASONING POLICY:
+    - You MUST perform an internal step-by-step reasoning process.
+    - You MUST organize your reasoning using the internal tags defined below.
+    - You MUST NOT reveal or output any reasoning, tags, or intermediate thoughts.
+
+    INTERNAL REASONING STRUCTURE (INTERNAL ONLY — DO NOT OUTPUT):
+
+    <thought>
+    General reasoning and control of the inference process.
+    </thought>
+
+    <hypothesis>
+    Evaluate one possible value of the target variable at a time.
+    </hypothesis>
+
+    <consistency_check>
+    Assess whether the assumed value is consistent with observed parent evidence.
+    </consistency_check>
+
+    <contradiction_check>
+    Check for strong and direct contradictions from parent evidence.
+    </contradiction_check>
+
+    <comparison>
+    Compare all evaluated values after finishing all hypotheses.
+    </comparison>
+
+    <decision>
+    Select the final value to output.
+    </decision>
+
+    TASK:
+    Select the SINGLE MOST PLAUSIBLE value of the target variable
+    given the observed evidence.
+
+    INTERNAL THINKING PROCESS (MANDATORY, INTERNAL):
+
+    - For EACH value in the target variable domain:
+      - Enter <hypothesis> and temporarily assume this value is true.
+      - Within <consistency_check>, assess whether this value makes sense
+        given the observed parent evidence.
+      - Within <contradiction_check>, determine whether any parent evidence
+        strongly contradicts this assumption.
+      - Do not discard a value unless contradictions are strong and direct,
+        as evidence may be noisy or incomplete.
+
+    - After ALL values have been evaluated:
+      - Enter <comparison> and compare how well each value fits the evidence.
+      - Prefer values supported by most parent signals.
+      - Penalize rare or extreme values unless clearly supported.
+
+    - If no value is clearly favored:
+      - Enter <decision> and select the most common real-world value.
+
+    INFERENCE CONSTRAINTS:
+    - Use ONLY the target variable and its parent variables.
+    - Ignore children, siblings, descendants, and any global narrative.
+    - Domain values are mutually exclusive.
+
+    Target variable: {variable}
+    Domain of target: {domain}
+
+    Parent variables:
+    {parents}
+
+    Observed evidence:
+    {evidence_block}
+
+    STRICT OUTPUT FORMAT:
+    Return ONLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>"
+    }}
+
+    No explanation.
+    No uncertainty.
+    No additional text.
+
+  the_final_countdown: |
+    You are a LOCAL QUALITATIVE INFERENCE MODULE operating over a graphical causal model.
+
+    Your role is to perform STRICTLY LOCAL inference for ONE variable at a time,
+    using ONLY its parents and observed evidence.
+    You do NOT perform global reasoning, storytelling, or diagnosis.
+
+    Your objective is NOT to construct a plausible narrative,
+    but to select the value that best preserves local causal consistency
+    under weak or missing quantitative information.
+
+    ────────────────────────────────────────
+    ALLOWED INFORMATION
+    ────────────────────────────────────────
+    You may use ONLY:
+    - the target variable
+    - its parent variables
+    - the observed values of those parents
+    - qualitative domain-level assumptions provided below
+
+    You MUST NOT:
+    - consider children, siblings, or descendants
+    - invent new evidence
+    - rely on global stories or real-world stereotypes
+    - assume extreme outcomes without local support
+
+    ────────────────────────────────────────
+    DOMAIN INFERENCE POSTURE
+    (This defines how cautious or permissive you should be
+    when evidence is weak or ambiguous.)
+
+    {context}
+
+    ────────────────────────────────────────
+    TASK
+    ────────────────────────────────────────
+    Select the SINGLE value from the target domain that is
+    MOST LOCALLY CONSISTENT with the observed parent evidence,
+    given the domain inference posture.
+
+    Local consistency means:
+    - the value does not require unsupported assumptions
+    - the value does not introduce unnecessary severity or intensity
+    - the value aligns with what the parents directly suggest
+
+    ────────────────────────────────────────
+    DECISION PRINCIPLES
+    ────────────────────────────────────────
+    1. If the target variable is already observed, return it with confidence="high".
+
+    2. When parent evidence clearly supports a specific value,
+      select it with confidence="high".
+
+    3. When parent evidence partially supports a value but alternatives remain plausible,
+      select the best-supported value with confidence="medium".
+
+    4. When parent evidence is weak, missing, or ambiguous:
+      - follow the DOMAIN INFERENCE POSTURE
+      - prefer values that minimize unsupported assumptions
+      - treat neutral or baseline states as fallback options, not defaults
+      - assign confidence="low"
+
+    5. Extreme, severe, or high-impact values MUST NOT be selected
+      unless they are directly supported by parent evidence
+      OR explicitly permitted by the domain inference posture.
+
+    6. Do NOT escalate severity, cost, risk, or intensity across variables
+      unless local parent evidence justifies it.
+
+    ────────────────────────────────────────
+    STRICT DOMAIN RULES
+    ────────────────────────────────────────
+    - You MUST select EXACTLY ONE value from the domain list.
+    - You MUST COPY the value verbatim from the domain.
+    - Selecting any value outside the domain is INVALID.
+    - If uncertain, select the locally safest value consistent with the domain posture.
+
+    ────────────────────────────────────────
+    INPUT
+    ────────────────────────────────────────
+    Target variable:
+    {variable}
+
+    Parent variables:
+    {parents}
+
+    Domain of target (COPY-ONLY LIST):
+    {domain}
+
+    Observed parent evidence:
+    {evidence_block}
+
+    ────────────────────────────────────────
+    OUTPUT FORMAT (STRICT)
+    ────────────────────────────────────────
+    Return EXACTLY the following JSON object and NOTHING ELSE:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    No explanation.
+    No additional text.
+
+  context_how_to_think: |
+    You are given the names of variables from a graphical model.
+
+    Write ONE short sentence (maximum 50 words) that:
+    - Describes the general real-world context or application of the dataset.
+    - Mentions a qualitative inference posture (cautious, balanced, or flexible) in neutral terms.
+
+    Constraints:
+    - Be purely descriptive.
+    - Do NOT include analysis, reasoning, or internal thoughts.
+    - Do NOT mention probabilities, uncertainty, or numeric concepts.
+    - Do NOT describe causal or dependency relationships.
+    - Do NOT mention any specific variable by name.
+    - Do NOT assume diagnosis, decision-making, or optimization tasks.
+    - Avoid evaluative, judgmental, or prescriptive language.
+
+    Output rules:
+    - Return ONLY a valid JSON object.
+    - Do NOT include explanations, comments, or markdown.
+    - The JSON must contain exactly one field named "context".
+    - The value of "context" must be a single sentence.
+    - The total output must fit within 80 tokens.
+
+    Variables:
+    {variables}
+
+    Return ONLY the JSON:
+    {{
+      "context": "<single sentence>"
+    }}
+
+  context_variable: |
+   You will be given the names of variables from a graphical model.
+
+    For EACH variable, write ONE short sentence (max 30 words)
+    describing what this variable typically represents in real-world
+    scientific, engineering, economic, or social system contexts.
+
+    Rules:
+    - Be high-level and descriptive, not analytical.
+    - Do NOT mention probabilities, uncertainty, or risk.
+    - Do NOT describe causal or dependency relationships.
+    - Do NOT refer to other variables.
+    - Do NOT assume diagnosis, decision-making, or optimization tasks.
+    - Prefer neutral descriptions of established domains.
+    - Each sentence must be self-contained.
+
+    STRICT KEY RULE:
+    - You MUST use each variable name EXACTLY as provided.
+    - Do NOT change capitalization.
+    - Do NOT add or remove spaces.
+    - Do NOT translate.
+    - Do NOT rename, normalize, or format.
+    - The JSON key MUST be a perfect copy of the variable name.
+
+    Variables:
+    {variables}
+
+    Return EXACTLY a JSON object in this format:
+
+    {{
+      "context": {{
+        "<EXACT variable name>": "<one sentence>",
+        "<EXACT variable name>": "<one sentence>"
+      }}
+    }}
+
+  context_variable_2: |
+    You are a domain-expert lexicographer. Your task is to provide objective, real-world definitions for specific variables in a system.
+
+    ### OPERATIONAL RULES
+    - Define EACH variable in exactly ONE sentence (max 50 words).
+    - NEUTRALITY: Describe the variable as a standalone entity. 
+    - NO HIERARCHY: Do NOT mention "parents," "children," "causes," or "effects."
+    - NO PROBABILITY: Avoid words like "likelihood," "chance," "risk," or "distribution."
+    - NO LOGIC: Do NOT describe how the variable is used in a model or decision-process.
+
+    ### STRING INTEGRITY (CRITICAL)
+    - The JSON keys must be an EXACT, character-for-character match of the provided variable names.
+    - Do NOT fix typos, do NOT change case, and do NOT remove underscores or special characters.
+    - If a variable name is "User_Age_2026", the key must be "User_Age_2026".
+
+    ### INPUT VARIABLES
+    {variables}
+
+    ### OUTPUT FORMAT (STRICT JSON)
+    Return only the following JSON object:
+    {{
+      "context": {{
+        "{{variable_1}}": "Definition of variable 1...",
+        "{{variable_2}}": "Definition of variable 2..."
+      }}
+    }}
+
+  context_generation: |
+    You will be given the names of variables from a graphical model.
+
+    Write ONE short sentence (max 50 words) describing the general application domain
+    or real-world setting these variables are commonly associated with.
+
+    Rules:
+    - Be high-level and descriptive, not analytical.
+    - Do NOT mention probabilities, uncertainty, or risk.
+    - Do NOT describe causal or dependency relationships.
+    - Do NOT mention any specific variable by name.
+    - Do NOT assume diagnosis, decision-making, or optimization tasks.
+    - Prefer neutral descriptions of established scientific or engineering domains.
+    - Return only the sentence.
+
+    Variables:
+    {variables}
+
+    Return EXACTLY a JSON object:
+    {{
+      "context": "<one sentence>"
+    }}
+  
+  semantic_enrichment: | 
+    You are a domain specialist assistant. You will be provided with a list of variables and their possible states from a graphical model.
+
+    TASK:
+    Generate a comprehensive semantic grounding for these variables. 
+    For each variable, explain its real-world meaning and what its states represent within the domain.
+
+    RULES:
+    - Focus on the technical and causal essence of each term.
+    - Be concise but informative (max 20 words per variable).
+    - Do NOT suggest specific correlations between variables yet.
+    - Treat the variables as part of a unified system.
+
+    VARIABLES AND DOMAINS:
+    {variables}
+    
+
+    Return EXACTLY a JSON object with a single "context" field containing the full description:
+    {{
+      "context": "Variable A: [Description]; Variable B: [Description]; ..."
+    }}
+  
+  step_by_step_true: |
+    You are an inference engine operating over a local causal structure.
+
+    Your task is to infer the most plausible value for a target variable, given:
+    - Its domain
+    - Its parent variables (local causal parents)
+    - Observed evidence
+    - Additional non-causal contextual information
+
+    You must use your reasoning process to evaluate the causal structure and provide the required JSON object in the final output.
+
+    Your reasoning should:
+    1. Identify which parent variables are causally relevant. If a parent has no direct evidence, use any other available evidence in the context to infer the most likely state of that parent before proceeding.
+    2. Evaluate how the observed evidence (direct or indirect) constrains the target variable.
+    3. Use domain consistency checks (the output must be a valid domain value).
+    4. Prefer the value that best explains the evidence under local causal assumptions.
+    5. If evidence for parents is missing, trace back through any available evidence to find the most probable path. If all signals are weak, choose the most typical or default value.
+
+    You are NOT allowed to:
+    - Apply explicit probabilistic calculations.
+    - Invent variables not provided.
+    - Output text outside of the JSON block.
+
+    You MUST include your step-by-step causal analysis inside the "internal_reasoning" field of the JSON (mandatory):
+
+    {{
+    "internal_reasoning": "Detailed causal analysis, including how you handled parents without direct evidence...",
+    "variable": "{variable}",
+    "value": "<one value from the domain>",
+    "confidence": "<high | medium | low>"
+    }}
+
+    IMPORTANT:
+    - "high" → strong evidence and clear causal support.
+    - "medium" → moderate evidence, some ambiguity or inferred parent states.
+    - "low" → weak evidence or conflicting signals.
+
+    Target variable:
+    {variable}
+
+    Observed evidence:
+    {evidence_block}
+
+    Domain of target:
+    {domain}
+
+    Parent variables (direct causes in a Bayesian network):
+    {parents}
+
+    Infer the most plausible value for the target variable.
+
+  criterium_low_with_agent: |
+    You are an inference engine operating over a local causal structure.
+
+
+    Your task is to infer the most plausible value for a target variable, given:
+    - Its domain
+    - Its parent variables (local causal parents)
+    - Observed evidence
+    - Additional non-causal contextual information
+
+
+    You must reason step by step internally, but DO NOT reveal your reasoning.
+
+
+    Your reasoning should:
+    1. Identify which parent variables are causally relevant given the evidence.
+    2. Evaluate how the observed evidence constrains the target variable.
+    3. Use domain consistency checks (the output must be a valid domain value).
+    4. Prefer the value that best explains the evidence under local causal assumptions.
+    5. If evidence is weak or ambiguous, choose the most typical or default value implied by the context.
+
+
+    You are NOT allowed to:
+    - Invent variables not provided.
+    - Invent values not in the domain.
+    - Apply explicit probabilistic calculations.
+    - Output intermediate reasoning or explanations.
+
+
+    You MUST output ONLY a valid JSON object in the exact format specified (mandatory):
+
+
+    {{
+    "variable": "<target variable name>",
+    "value": "<one value from the domain>", # ⚠️ MUST strictly match a value in the domain
+    "confidence": "<high | medium | low>"
+    }}
+
+
+    IMPORTANT:
+    - The "value" field is **mandatory** and must always be one of the values in the target variable's domain.
+    - The LLM must NOT invent values; if unsure, pick the value that **best fits the evidence**.
+    - The "confidence" field represents your **subjective certainty**:
+    - "high" → strong evidence and clear causal support.
+    - "medium" → moderate evidence or some ambiguity.
+    - "low" → weak evidence or conflicting signals.
+    - Always provide a confidence rating.
+    - The "variable" field must exactly match the target variable name given. No abbreviations or alterations.
+
+
+    Target variable:
+    {variable}
+
+
+    Domain of target:
+    {domain}
+
+
+    Parent variables (direct causes in a Bayesian network):
+    {parents}
+
+
+    Observed evidence:
+    {evidence_block}
+
+
+    Infer the most plausible value for the target variable.
+
+  step_by_step_small: |
+    You are a local causal inference engine.
+
+
+    Task:
+    Infer the single most plausible value of a target variable given:
+    - Its domain
+    - Direct causal parents
+    - Observed evidence
+    - Optional contextual information
+
+
+    Inputs:
+    Target: {variable}
+    Domain: {domain}
+    Parents: {parents}
+    Evidence: {evidence_block}
+
+
+    Internal reasoning steps (do NOT output reasoning):
+    1. Identify which parent variables are relevant given the evidence.
+    2. Filter values to those compatible with observed evidence.
+    3. Prioritize direct parents and causal constraints over contextual hints.
+    4. Select the value that best explains the evidence causally.
+    5. If evidence is weak or conflicting, pick the most typical or default value deterministically.
+    6. Assign confidence:
+    - high → strong, unambiguous causal support
+    - medium → moderate support or minor ambiguity
+    - low → weak or conflicting evidence
+
+
+    Rules:
+    - Only use provided variables and domain values; do NOT invent anything.
+    - Output must strictly follow the JSON format below.
+    - Resolve conflicts deterministically, always preferring causally stronger evidence.
+
+
+    Output (JSON only):
+    {{
+    "variable": "<target variable name>", # exact match
+    "value": "<one valid domain value>", # must be in domain
+    "confidence": "<high | medium | low>"
+    }}
+
+
+    Infer the single most plausible value.
+
+  simple_small: |
+    ROLE:
+    You are a deterministic local causal inference module.
+
+
+    SCOPE:
+    Infer the target variable using ONLY its parent variables
+    and their observed values.
+    Ignore all other variables.
+
+
+    TASK:
+    Select the SINGLE most plausible value of the target variable.
+
+    INPUTS:
+    - Target variable
+    - Parent variables with observed values
+    - Domain of the target variable
+
+
+    DECISION POLICY:
+    1. If the target variable is observed, return it with confidence="high".
+    2. Otherwise, infer using only parent evidence.
+    3. Choose rare or extreme values ONLY if parent evidence clearly supports them.
+    4. If evidence is strong → confidence="high".
+    5. If evidence is partial → confidence="medium".
+    6. If evidence is weak, missing, or conflicting → choose the most plausible value and set confidence="low".
+
+
+    CONSTRAINTS:
+    - You MUST copy exactly one value from the provided domain.
+    - Never output values outside the domain.
+    - Internal reasoning is allowed but MUST NOT be explained.
+
+
+    Target variable:
+    {variable}
+
+
+    Parent variables:
+    {parents}
+
+
+    Domain (COPY ONE):
+    {domain}
+
+
+    Observed evidence:
+    {evidence_block}
+
+
+    OUTPUT (JSON ONLY):
+    {{
+    "variable": "<target variable name>",
+    "value": "<domain value>",
+    "confidence": "high | medium | low"
+    }}
+
+  critique_inference: |
+   You are a Senior Causal Validator. You have been called because a primary inference module reported LOW CONFIDENCE in its prediction.
+    
+    ### AUDIT TASK
+    Review the proposed value for the Target Variable. Your goal is to determine if there is a more mathematically or logically sound state given the causal structure.
+
+    ### SYSTEM PARAMETERS
+    - Target Variable: {variable}
+    - Allowed Domain: {domain}
+    - Parent Evidence (Direct): {evidence_block}
+    - Contextual Priors: {context}
+    - Proposed Value (Flagged for Review): {predicted_value}
+
+    ### CRITICAL ANALYSIS PROTOCOL
+    1. **Contradiction Check**: Does the {predicted_value} contradict any direct evidence in {evidence_block}?
+    2. **Latent Parent Estimation**: If parents are missing, what is the most "conservative" (highest prior) state for them? Does this support the {predicted_value}?
+    3. **Domain Exhaustion**: Quickly evaluate other values in {domain}. Is there a value that is "less risky" or has higher frequency in the {context}?
+    4. **Final Verdict**: Either confirm the {predicted_value} or override it with a superior candidate.
+
+    ### CONSTRAINTS
+    - You must output exactly ONE value from the domain.
+    - Be decisive. Do not provide a range of probabilities.
+    - If the evidence is truly non-existent, default to the "Base Rate" provided in the {context}.
+
+    ### OUTPUT FORMAT (STRICT JSON, NO COMMENTS)
+    {{
+      "reason": "Analysis of why the initial prediction was weak and why the final selection was made...",
+      "variable": "{variable}",
+      "value": "<final_selected_value>",
+      "valid": true | false,
+    }}
+
+    ### EXAMPLE OUTPUT
+    {{"reason": "Evidence suggests X.", "variable": "IndustryFailureRate", "value": "High", "confidence": "high", "valid": true}}
+
+  local_inference_with_confidence: |
+    You are a Causal Inference Validator. Your task is to map evidence to a SPECIFIC domain.
+
+    ### 1. DELIBERATION (Think here)
+    - Target Variable: {variable}
+    - Parents: {parents}
+    - Domain Options: {domain}
+    - Evidence: {evidence_block}
+
+    - Step A: If {parents} is empty, I must choose the most frequent/neutral value from {domain} and set confidence to 'low'.
+    - Step B: If parents exist, I will check if their observed values in {evidence_block} force a change in {variable}.
+    - Step C: I must map my conclusion to EXACTLY one of the strings in {domain}. No synonyms.
+
+    ### 2. FINAL MAPPING (Strict JSON)
+    I will now output the result. I am forbidden from using any value not found in {domain}.
+
+    {{
+      "variable": "{variable}",
+      "selected_reasoning": "Quick justification for the value and confidence level.",
+      "value": "VALUE_FROM_DOMAIN_ONLY",
+      "confidence": "low | medium | high"
+    }}
+
+  simple_conservative: |
+    You are a local causal inference module. Operate deterministically and with attention to uncertainty.
+
+    BACKGROUND CONTEXT (DATASET-LEVEL PRIOR):
+      Inference in this domain should be cautious and conservative.
+      When evidence is weak or ambiguous, prefer baseline or low-impact states.
+      Avoid severe, costly, or extreme values unless they are directly supported by parent evidence.
+      Do not escalate intensity, damage, or risk without clear local justification.
+    
+    This context provides general background and typical patterns.
+    It must NOT override direct parent evidence.
+
+    TASK:
+    Select the SINGLE MOST PLAUSIBLE value of the target variable
+    given the observed parent evidence.
+
+    USE ONLY:
+    - the target variable
+    - its parent variables
+    - the observed values of those parents
+    - qualitative base frequency assumptions, if evidence is weak
+
+    ROLE CONSTRAINTS:
+    - You are NOT a storyteller or diagnostician.
+    - Focus only on local inference using parent evidence.
+    - NEVER consider children, siblings, or descendants.
+
+    DECISION RULES:
+    1. If the target variable is observed, return it with confidence="high".
+    2. Rare or extreme values remain rare; select only if parent evidence clearly supports it.
+    3. If evidence strongly favors a value, select it with confidence="high".
+    4. If evidence partially favors a value, select it with confidence="medium".
+    5. If evidence is weak, missing, ambiguous, or conflicting, select a plausible value but assign confidence="low".
+    6. You must COPY one value from the domain.
+    7. Internal reasoning is allowed to determine confidence; do NOT explain reasoning in output.
+    
+    STRICT DOMAIN RULE:
+    - You MUST select a value ONLY from the domain listed.
+    - Selecting a value outside the domain is NOT allowed and is always invalid.
+    - If unsure, pick the most plausible value from the domain.
+
+    Target variable: {variable}
+    Parent variables:
+    {parents}
+
+    Domain of target (COPY-ONLY LIST):
+    {domain}
+
+    Observed evidence:
+    {evidence_block}
+
+    STRICT OUTPUT FORMAT:
+    Return EXACTLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    No explanation.
+    No additional text.
+  simple_neutral: |
+    You are a local causal inference module. Operate deterministically and with attention to uncertainty.
+
+    BACKGROUND CONTEXT (DATASET-LEVEL PRIOR):
+      Inference in this domain should be balanced and moderate.
+      When evidence is weak or ambiguous, avoid both extreme and overly minimal assumptions.
+      Select values that represent typical or average conditions unless evidence suggests otherwise.
+    
+    This context provides general background and typical patterns.
+    It must NOT override direct parent evidence.
+
+    TASK:
+    Select the SINGLE MOST PLAUSIBLE value of the target variable
+    given the observed parent evidence.
+
+    USE ONLY:
+    - the target variable
+    - its parent variables
+    - the observed values of those parents
+    - qualitative base frequency assumptions, if evidence is weak
+
+    ROLE CONSTRAINTS:
+    - You are NOT a storyteller or diagnostician.
+    - Focus only on local inference using parent evidence.
+    - NEVER consider children, siblings, or descendants.
+
+    DECISION RULES:
+    1. If the target variable is observed, return it with confidence="high".
+    2. Rare or extreme values remain rare; select only if parent evidence clearly supports it.
+    3. If evidence strongly favors a value, select it with confidence="high".
+    4. If evidence partially favors a value, select it with confidence="medium".
+    5. If evidence is weak, missing, ambiguous, or conflicting, select a plausible value but assign confidence="low".
+    6. You must COPY one value from the domain.
+    7. Internal reasoning is allowed to determine confidence; do NOT explain reasoning in output.
+    
+    STRICT DOMAIN RULE:
+    - You MUST select a value ONLY from the domain listed.
+    - Selecting a value outside the domain is NOT allowed and is always invalid.
+    - If unsure, pick the most plausible value from the domain.
+
+    Target variable: {variable}
+    Parent variables:
+    {parents}
+
+    Domain of target (COPY-ONLY LIST):
+    {domain}
+
+    Observed evidence:
+    {evidence_block}
+
+    STRICT OUTPUT FORMAT:
+    Return EXACTLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    No explanation.
+    No additional text.
+  simple_permisive: |
+    You are a local causal inference module. Operate deterministically and with attention to uncertainty.
+
+    BACKGROUND CONTEXT (DATASET-LEVEL PRIOR):
+      Inference in this domain allows for variability and extremes.
+      When evidence is weak or ambiguous, do not strongly penalize high-impact or extreme states.
+      Select values that remain locally plausible even if they imply volatility or rapid change.
+    
+    This context provides general background and typical patterns.
+    It must NOT override direct parent evidence.
+
+    TASK:
+    Select the SINGLE MOST PLAUSIBLE value of the target variable
+    given the observed parent evidence.
+
+    USE ONLY:
+    - the target variable
+    - its parent variables
+    - the observed values of those parents
+    - qualitative base frequency assumptions, if evidence is weak
+
+    ROLE CONSTRAINTS:
+    - You are NOT a storyteller or diagnostician.
+    - Focus only on local inference using parent evidence.
+    - NEVER consider children, siblings, or descendants.
+
+    DECISION RULES:
+    1. If the target variable is observed, return it with confidence="high".
+    2. Rare or extreme values remain rare; select only if parent evidence clearly supports it.
+    3. If evidence strongly favors a value, select it with confidence="high".
+    4. If evidence partially favors a value, select it with confidence="medium".
+    5. If evidence is weak, missing, ambiguous, or conflicting, select a plausible value but assign confidence="low".
+    6. You must COPY one value from the domain.
+    7. Internal reasoning is allowed to determine confidence; do NOT explain reasoning in output.
+    
+    STRICT DOMAIN RULE:
+    - You MUST select a value ONLY from the domain listed.
+    - Selecting a value outside the domain is NOT allowed and is always invalid.
+    - If unsure, pick the most plausible value from the domain.
+
+    Target variable: {variable}
+    Parent variables:
+    {parents}
+
+    Domain of target (COPY-ONLY LIST):
+    {domain}
+
+    Observed evidence:
+    {evidence_block}
+
+    STRICT OUTPUT FORMAT:
+    Return EXACTLY:
+
+    {{
+      "variable": "<target variable name>",
+      "value": "<one value from the domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    No explanation.
+    No additional text.
+
+  simple_1: |
+    You are a local causal inference module within a Bayesian Network. 
+    Your goal is to perform a semantic MPE (Most Probable Explanation) inference.
+
+    ### 1. BACKGROUND CONTEXT (General Knowledge):
+    {context}
+    Use this for typical patterns. Direct evidence ALWAYS overrides this.
+
+    ### 2. TASK:
+    Determine the SINGLE MOST PLAUSIBLE value for the target variable: {variable}.
+
+    ### 3. INFERENCE RULES (CRITICAL):
+    - PRIMARY FOCUS: Use the observed values of the Parent Variables: {parents}.
+    - PROBABILISTIC NEUTRALITY: In Bayesian Networks, the most probable state (MPE) is often the 'average' or 'neutral' case (e.g., "Medium", "Normal") unless evidence is extreme. Avoid defaulting to extreme values (High/Low) based on general optimism.
+    - EVIDENCE HIERARCHY: Direct Parent Evidence > Inferred Parent State > Background Context.
+    - LOCALITY: Ignore children or descendants of the target variable.
+
+    ### 4. DECISION LOGIC:
+    1. If the target is in the evidence, return it (Confidence: high).
+    2. If parents are observed: Map their state to the target. If the parent is in a 'normal/no' state, the target is likely also in its 'normal/medium' state. 
+    3. If parents are NOT observed: Use "Observed evidence" to estimate their state. If evidence is weak or indirect, DEFAULT to the most frequent domain value (often the middle-ground option).
+    4. AVOID SPECULATION: Do not assume "No Bankruptcy" means "Maximum Success". It usually means "Average Performance".
+
+    ### 5. TARGET DATA:
+    - Target Variable: {variable}
+    - Domain (Choose ONLY from this list): {domain}
+    - Direct Parents: {parents}
+
+    ### 6. EVIDENCE & CONTEXT:
+    Observed evidence:
+    {evidence_block}
+
+    ### 7. STRICT OUTPUT FORMAT:
+    Return ONLY a valid JSON object. No prose. No markdown blocks.
+
+    {{
+      "variable": "{variable}",
+      "value": "<one_value_from_domain>",
+      "confidence": "high | medium | low",
+      "internal_reasoning": "Briefly state if you used direct parents or inferred them from indirect evidence."
+    }}
+  
+  cot_1: |
+    You are a causal inference engine performing MPE (Most Probable Explanation) on a local graphical structure.
+
+    ### 1. INTERNAL POLICY:
+    - You MUST perform a step-by-step causal analysis.
+    - Your reasoning must be encapsulated ONLY within the "internal_reasoning" JSON field.
+    - **STATISTICAL ANCHORING:** Most variables in this domain follow a normal distribution. In the absence of extreme evidence, the "Medium", "Normal", or "No" states are mathematically more probable (MPE) than extreme "High" or "Yes" states.
+
+    ### 2. TASK:
+    Determine the MOST PROBABLE value of the target variable {variable} based on the evidence provided.
+
+    ### 3. INFERENCE PROTOCOL (TRANSITIVE CAUSALITY):
+    - **Direct Path:** Check if any Direct Parents ({parents}) have observed evidence in the "Observed evidence" block.
+    - **Indirect Path (Propagation):** If a Direct Parent is NOT observed, you MUST analyze the "Additional local context" and "Observed evidence" to infer that parent's most likely state.
+    - **Independence:** Variables that are not ancestors (parents, grandparents, etc.) should only be used to refine the state of the ancestors.
+    - **Domain Constraint:** You MUST select a value exactly as written in the domain: {domain}.
+
+    ### 4. PROBABILITY & CONFIDENCE:
+    - **Neutrality Rule:** Do NOT equate "No Bankruptcy" or "No Crisis" with "High Performance". A neutral evidence state typically maps to a "Medium" or "Stable" target state.
+    - **Prior vs. Evidence:** Strong, explicit evidence from the causal chain overrides base frequencies. However, vague or indirect evidence should default to the most frequent/middle-ground state.
+    - **Confidence Scoring:**
+        - "high": Direct evidence for parents exists and clearly supports the value.
+        - "medium": Parents were inferred from other evidence (indirect path), but the signal is consistent.
+        - "low": No evidence for parents or ancestors exists; relying on default/middle-ground patterns.
+
+    ### 5. DATA INPUTS:
+    - **Target Variable:** {variable}
+    - **Domain:** {domain}
+    - **Direct Parents:** {parents}
+
+    - **Observed evidence:**
+    {evidence_block}
+
+    - **Additional context (Indirect evidence):**
+    {related_block}
+
+    ### 6. STRICT JSON OUTPUT FORMAT:
+    Output ONLY the JSON object. No prose. No markdown blocks.
+
+    {{
+      "internal_reasoning": "Step 1: Check direct parents. Step 2: Evaluate if parents imply an extreme or neutral state. Step 3: Map to the most probable domain value, prioritizing 'Medium/Normal' if evidence is not definitive.",
+      "variable": "{variable}",
+      "value": "<value_from_domain>",
+      "confidence": "high | medium | low"
+    }}
+
+  step_by_step_true_1: |
+    ### CORE INSTRUCTIONS:
+    Your task is to perform a semantic MPE (Most Probable Explanation) to infer the most plausible value for the target variable {variable}. 
+
+    **CRITICAL LOGIC:** In Bayesian networks, "No Evidence" or "Neutral Evidence" (e.g., No Bankruptcy, No Crisis) typically maps to a **Normal/Medium** state. Do not assume extreme success (High) unless the evidence explicitly dictates an exceptional case.
+
+    ### REASONING PROTOCOL (Step-by-Step):
+    1. **Parent Analysis:** Identify the direct parent variables: {parents}. 
+    2. **Evidence Check:** Search the "Observed evidence" block for direct values of these parents.
+    3. **Indirect Path (Propagation):** If a parent has NO direct evidence, you MUST use any "Additional contextual information" or other observed variables to infer that parent's most likely state before proceeding. 
+    4. **Causal Constraint:** Evaluate how these states (direct or inferred) constrain the target variable {variable}. 
+      - *Rule:* Prefer the "Stable/Medium" domain value if the causal chain is not strongly positive or negative.
+    5. **Domain Mapping:** Ensure the final value is exactly as listed in the domain: {domain}.
+    6. **Default Rule:** If no evidence (direct or indirect) points to a specific state, select the most typical/base case value (usually the middle-ground option).
+
+    ### CONSTRAINTS:
+    - DO NOT apply explicit probabilistic calculations (no formulas).
+    - DO NOT invent variables.
+    - AVOID BIAS: Absence of a negative condition is NOT evidence of an extreme positive condition.
+    - OUTPUT ONLY the required JSON object.
+
+    ### DATA INPUTS:
+    - **Target Variable:** {variable}
+    - **Target Domain:** {domain}
+    - **Direct Parents (Causes):** {parents}
+
+    - **Observed evidence:** {evidence_block}
+
+    - **Additional contextual information:**
+    {related_block}
+
+    ### OUTPUT FORMAT (MANDATORY JSON):
+    Include your step-by-step causal analysis inside the "internal_reasoning" field.
+
+    {{
+      "internal_reasoning": "Step 1: Direct parent check. Step 2: Indirect evidence analysis for missing parents. Step 3: Local causal conclusion, prioritizing neutral states (Medium/Normal) if evidence is not extreme.",
+      "variable": "{variable}",
+      "value": "<one value from the domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    *Confidence Definitions:*
+    - "high": Strong direct evidence for parents.
+    - "medium": Inferred parent states from indirect evidence, but logically consistent.
+    - "low": Weak evidence or relying on default/neutral patterns.
+
+  simple_2: |
+    You are a deterministic local inference engine operating within a Bayesian network.
+
+    ### KNOWLEDGE BASE
+    General Context: {context}
+    (Use this only to resolve ambiguity when direct evidence is absent. Direct evidence always takes precedence.)
+
+    ### LOCAL TOPOLOGY
+    Target Variable: {variable}
+    Parent Nodes: {parents}
+    Allowed Values (Domain): {domain}
+
+    ### EVIDENCE (OBSERVED VALUES)
+    {evidence_block}
+
+    ### INFERENCE RULES
+    1. EVIDENCE PRIORITY: If {variable} appears directly in the Evidence, return that exact value.
+    2. LOCAL INFERENCE: Otherwise, examine only the Parent Nodes listed above. Select the value from
+      the Domain that maximizes the conditional probability P({variable} | observed parents).
+    3. FALLBACK: If no parent state can be determined from the Evidence, select the prior-dominant
+      value for {variable} as supported by the General Context.
+    4. DOMAIN LOCK: Your output value must be copied exactly as it appears in the Domain list.
+      Do not paraphrase, abbreviate, or invent values.
+
+    ### CONSTRAINTS
+    - Consider only variables explicitly listed as Parent Nodes. Ignore all others.
+    - If evidence conflicts with the General Context, evidence wins.
+    - No explanation, no filler text.
+
+    ### OUTPUT FORMAT (JSON ONLY)
+    {{
+      "variable": "{variable}",
+      "value": "<exact_value_from_domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    Confidence guide — high: target is directly observed, or all parents are observed with clear
+    causal direction. medium: one or more parents inferred from context. low: no parent information
+    or conflicting signals.
+
+  cot_2: |
+    You are a Bayesian inference engine performing local probabilistic reasoning on a single node
+    within a Directed Acyclic Graph (DAG).
+
+    ### TOPOLOGY
+    Target Variable: {variable}
+    Domain (allowed values): {domain}
+    Parent Nodes: {parents}
+
+    ### EVIDENCE & CONTEXT
+    Observed Evidence: {evidence_block}
+    Supporting Context: {related_block}
+    (Supporting Context describes the qualitative causal relationships and typical behavior of
+    this variable and its parents. Use it only to resolve unknown parent states.)
+
+    ### INFERENCE STEPS
+    1. Check whether {variable} itself appears in the Observed Evidence. If yes, that is the value —
+      skip to output.
+    2. For each Parent Node, determine its state from the Observed Evidence. Record which parents
+      are directly observed and which are unknown.
+    3. For any Parent Node whose state is unknown, use the Supporting Context to estimate its most
+      likely state. Note the basis for each estimate.
+    4. Given the fully resolved (observed or estimated) parent states, identify which value in the
+      Domain is the most probable outcome for {variable} under those parent conditions. This is a
+      local conditional maximization — do not reason about the global joint distribution.
+    5. Assess confidence based on how much parent information was directly observed versus inferred.
+
+    ### CONSTRAINTS
+    - Only consider variables listed as Parent Nodes. Children, descendants, and non-adjacent nodes
+      must not influence your reasoning.
+    - Use qualitative language for causal strength: strongly favors, moderately supports,
+      weakly supports, indeterminate. Do not use numeric probabilities or percentages.
+    - Your output value must be copied exactly as written in the Domain.
+
+    ### OUTPUT FORMAT (STRICT JSON)
+    {{
+      "internal_reasoning": "Step 1 — Evidence check: [is {variable} observed?]. Step 2 — Parent states: [list each parent and its observed value or 'unknown']. Step 3 — Parent estimation: [for unknown parents, state the estimate and its basis]. Step 4 — Value selection: [which domain value is most probable and why]. Step 5 — Confidence: [rationale].",
+      "variable": "{variable}",
+      "value": "<exact_value_from_domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    Confidence guide — high: target directly observed, or all parents observed with unambiguous
+    causal direction. medium: one or more parents estimated from context with reasonable support.
+    low: conflicting signals, or no usable parent information.
+
+  step_by_step_true_2: |
+    You are a causal inference engine processing a single node within a Directed Acyclic Graph (DAG).
+
+    ### TASK
+    Determine the Most Probable value for the Target Variable by performing local conditional
+    inference given its direct Parent Nodes. This is a local operation: you maximize
+    P({variable} | direct parents), not the global joint probability.
+
+    ### INPUT DATA
+    Target Variable: {variable}
+    Allowed Domain: {domain}
+    Direct Parent Nodes: {parents}
+    Observed Evidence: {evidence_block}
+    Additional Context: {related_block}
+    (Additional Context encodes the qualitative causal relationships and typical behavior of
+    variables in this network. Use it only to estimate the state of parents not present in
+    the Observed Evidence.)
+
+    ### EXECUTION STEPS
+
+    **Step 1 — Direct evidence check**
+    Determine whether {variable} itself is present in the Observed Evidence.
+    If yes: that value is the answer. Record it and proceed directly to Step 4.
+
+    **Step 2 — Parent state mapping**
+    For each node listed in Direct Parent Nodes:
+    - Mark it as OBSERVED if its value appears in the Observed Evidence.
+    - Mark it as UNKNOWN otherwise.
+
+    **Step 3 — Unknown parent estimation**
+    For each UNKNOWN parent, consult the Additional Context to estimate its most plausible state.
+    Use qualitative causal language only: strongly favors, moderately supports, weakly supports,
+    indeterminate. Do not assign numeric probabilities. If the context provides no useful signal
+    for a parent, mark it as INDETERMINATE.
+
+    **Step 4 — Value selection**
+    Given all parent states (observed or estimated), identify which value from the Allowed Domain
+    is the most probable outcome for {variable} under those conditions. Select exactly one value.
+    The selected value must appear in the Allowed Domain exactly as written — do not paraphrase
+    or invent values.
+
+    ### CONSTRAINTS
+    - Strictly ignore any nodes not listed as Direct Parent Nodes, including children, spouses,
+      and non-adjacent ancestors.
+    - If evidence and context conflict, evidence takes priority.
+    - Output must be valid JSON only. No text outside the JSON block.
+
+    ### OUTPUT STRUCTURE
+    {{
+      "internal_reasoning": "Step 1 (Direct evidence check): [is {variable} in evidence? what value?]. Step 2 (Parent states): [for each parent: name — OBSERVED: value / UNKNOWN]. Step 3 (Unknown parent estimation): [for each unknown parent: estimate and qualitative basis, or INDETERMINATE]. Step 4 (Value selection): [which domain value follows from the resolved parent states and why].",
+      "variable": "{variable}",
+      "value": "<exact_value_from_domain>",
+      "confidence": "high | medium | low"
+    }}
+
+    ### CONFIDENCE HEURISTICS
+    - high: {variable} is directly observed, OR all parents are observed with a clear and
+      unambiguous causal direction toward one domain value.
+    - medium: one or more parents were estimated from context with reasonable qualitative support;
+      the causal direction is plausible but not certain.
+    - low: two or more parents are INDETERMINATE, evidence is contradictory, or the context
+      provides no useful signal for resolving the target value.

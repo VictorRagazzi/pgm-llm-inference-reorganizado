@@ -1,0 +1,43 @@
+[project]
+name = "pgm-llm-inference"
+version = "0.1.0"
+description = "Bayesian Network inference with pluggable strategies including LLM-driven MAP"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "PyYAML>=6.0",
+    "requests>=2.31.0",
+    "pgmpy>=1.0.0",
+    "pyparsing>=3.1.0",
+    "openai>=2.8.1",
+    "pyagrum>=2.3.1",
+    "mplcursors>=0.7",
+    "seaborn>=0.13.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+]
+llm = [
+    "openai>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pgm_llm_inference"]
