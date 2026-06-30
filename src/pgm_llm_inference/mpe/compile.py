@@ -40,31 +40,31 @@ from .graph import topological_order
 # ---------------------------------------------------------------------------
 
 @dataclass
-class CompiledSemanticMessages:
-    """
-    Produto da fase de compilação (Bucket Elimination com evidence={}).
+    class CompiledSemanticMessages:
+        """
+        Produto da fase de compilação (Bucket Elimination com evidence={}).
 
-    Campos
-    ------
-    messages          : dict  variable → SemanticMessage com todas as rows
-                        do produto cartesiano dos pais.
-    elimination_order : lista de variáveis na ordem de eliminação (reverso
-                        topológico), reutilizada em reconstruct_assignment.
-    briefing          : BriefingResponse gerado com evidence={}.
-    bn                : BayesianNetwork parseada do BIF.
-    alias_map         : mapeamento alias → variable_id (normalização de nomes).
-    metadata          : metadados por variável (display_name, expert_note etc.).
-    relationship_notes: notas de relacionamento qualitativo por variável.
-    traces            : histórico de chamadas LLM da fase de compilação.
-    """
-    messages: dict[str, SemanticMessage]
-    elimination_order: list[str]
-    briefing: BriefingResponse
-    bn: BayesianNetwork
-    alias_map: dict[str, str]
-    metadata: dict[str, VariableMetadata]
-    relationship_notes: dict[str, tuple[str, ...]]
-    traces: list[PromptTrace] = field(default_factory=list)
+        Campos
+        ------
+        messages          : dict  variable → SemanticMessage com todas as rows
+                            do produto cartesiano dos pais.
+        elimination_order : lista de variáveis na ordem de eliminação (reverso
+                            topológico), reutilizada em reconstruct_assignment.
+        briefing          : BriefingResponse gerado com evidence={}.
+        bn                : BayesianNetwork parseada do BIF.
+        alias_map         : mapeamento alias → variable_id (normalização de nomes).
+        metadata          : metadados por variável (display_name, expert_note etc.).
+        relationship_notes: notas de relacionamento qualitativo por variável.
+        traces            : histórico de chamadas LLM da fase de compilação.
+        """
+        messages: dict[str, SemanticMessage]
+        elimination_order: list[str]
+        briefing: BriefingResponse
+        bn: BayesianNetwork
+        alias_map: dict[str, str]
+        metadata: dict[str, VariableMetadata]
+        relationship_notes: dict[str, tuple[str, ...]]
+        traces: list[PromptTrace] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

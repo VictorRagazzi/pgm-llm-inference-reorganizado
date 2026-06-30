@@ -3,12 +3,13 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 import pgm_llm_inference.utils as utils
+from pgm_llm_inference.utils import load_or_compile
 from pgm_llm_inference.io.loaders import load_network
 from pgm_llm_inference.logging.experiment_logger import log_experiment, log_experiment_csv
 from pgm_llm_inference.experiment.llm_factory import build_llm_fn
 from pgm_llm_inference.experiment.experiment import get_hidden_vars
 from pgm_llm_inference.mpe import compile_semantic_messages, infer_from_compiled, CompiledSemanticMessages, parse_bif
-from pgm_llm_inference.experiment.batch import run_batch
+from pgm_llm_inference.experiment.batch import run_batch, make_evidence_sizes
 from pgm_llm_inference.evaluation.metrics import count_llm_hits
 from pgm_llm_inference.experiment.llm_factory import get_model_name
 
@@ -41,7 +42,7 @@ def _notify_beep(frequency: int, duration_ms: int) -> None:
 @dataclass
 class ExperimentConfig:
     dataset_name: str
-    use_real_llm: bool = False
+    use_real_llm: bool = True
     use_local_llm: bool = True
     inference_mode: str = MPE
     context_type: Optional[str] = None
@@ -50,7 +51,7 @@ class ExperimentConfig:
     evidence_sizes: List[int] = field(default_factory=list)
     query_sizes: List[int] = field(default_factory=lambda: [1])
     n_trials: int = 3
-    max_estimated_llm_calls: int = 50
+    max_estimated_llm_calls: int = 300
 
     def __post_init__(self):
         if self.inference_mode not in (MAP, MPE):
@@ -114,6 +115,7 @@ def run_experiment(
         evidence=evidence,
         llm_fn=llm_fn,
         apply_audit_repair_enabled=True,
+        use_real_llm=global_cfg.use_real_llm
     )
 
     # --- Métricas ---
@@ -169,16 +171,17 @@ def run_experiment(
 def main():
     datasets = [
         # "gonorrhoeae.bif",
-        # "cryptocurrency.bif",
-        "hepar2.bif",
-        "munin1.bif",
-
-        # "sachs.bif",
         # "diabets.bif",
+        # "aspergillus.bif",
+        # "adhd.bif",
+        "munin1.bif",
+        # "hepar2.bif",
+
+        # "cryptocurrency.bif",
+        # "sachs.bif",
         # "coronary.bif",
         # "crimescene.bif",
         # "coral1.bif",
-        # "adhd.bif",
         # "asia.bif",
         # "insurance.bif",
     ]
@@ -191,7 +194,7 @@ def main():
 
     llm_fn = build_llm_fn(use_real_llm=cfg.use_real_llm, use_local_llm=cfg.use_local_llm)
 
-    BASE_DIR = Path(__file__).resolve().parents[2]
+    BASE_DIR = Path(__file__).resolve().parents[3]
 
     for name in datasets:
         print(f"\n{'=' * 60}")
@@ -206,8 +209,17 @@ def main():
         # --- COMPILAÇÃO: roda UMA vez por dataset ---
         # Executa Bucket Elimination com evidence={} → produto cartesiano completo.
         # Custo: N chamadas LLM (uma por variável).
+        # --- Tamanho do batch baseado na rede compilada ---
+        num_nodes = len(network.variables.keys())
+        limit = int(num_nodes * 0.5)
+        current_evidence_sizes = make_evidence_sizes(limit)
+        # current_evidence_sizes = list(range(1, limit + 1))
+        print(f"\n>>> Testando evidence sizes {current_evidence_sizes}")
+
+
         print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
-        compiled = compile_semantic_messages(
+        compiled = load_or_compile(
+            dataset_name=name,
             network=network,
             bif_path=path,
             metadata_path=BASE_DIR / "metadata" / f"{name.split('.')[0]}.jsonl",
@@ -217,12 +229,6 @@ def main():
         )
         print(f">>> [COMPILE] ✓ {len(compiled.messages)} mensagens compiladas.")
 
-        # --- Tamanho do batch baseado na rede compilada ---
-        num_nodes = len(compiled.bn.variables)
-        limit = int(num_nodes * 0.5)
-        current_evidence_sizes = list(range(1, limit + 1))
-
-        print(f"\n>>> Testando evidence sizes 1..{limit}")
 
         # --- INFERÊNCIA: roda para cada evidência — sem LLM no bucket ---
         # Custo por inferência: 0 chamadas LLM no bucket + 2 LLM (reconstruction + audit).

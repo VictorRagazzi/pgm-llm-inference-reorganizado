@@ -362,15 +362,29 @@ def build_reconstruction_prompt(
     metadata: dict[str, VariableMetadata],
     relationship_notes: dict[str, tuple[str, ...]] | None = None,
 ) -> str:
+    # Só a row selecionada de cada hidden var — o resto é ruído para o LLM
+    selected_rows = {}
+    for var, selected_value in hidden_assignment.items():
+        msg = messages.get(var)
+        if msg is None:
+            continue
+        matched = next(
+            (r for r in msg.rows if r.selected_value == selected_value),
+            msg.rows[0] if msg.rows else None,
+        )
+        if matched:
+            selected_rows[var] = {
+                "context": matched.context,
+                "selected_value": matched.selected_value,
+                "confidence": matched.confidence,
+                "rationale": matched.rationale,
+            }
+
     payload = {
         "hidden_assignment": hidden_assignment,
         "complete_assignment": complete_assignment,
         "fixed_evidence": evidence,
-        "backpointer_messages_used": {
-            variable: message.model_dump(mode="json")
-            for variable, message in messages.items()
-        },
-        "network": network_payload(bn, metadata, evidence, relationship_notes or {}),
+        "selected_backpointers": selected_rows,  # só hidden vars, só row escolhida
     }
     schema = {
         "hidden_assignment": hidden_assignment,
@@ -385,6 +399,22 @@ def build_reconstruction_prompt(
     )
 
 
+def _markov_blanket(var: str, bn: BayesianNetwork) -> set[str]:
+    """Pais + filhos + co-pais (pais dos filhos)."""
+    parents_map = bn.parents
+    children_map = bn.children_map()
+
+    parents = set(parents_map.get(var, ()))
+    children = set(children_map.get(var, ()))
+    co_parents = {
+        p
+        for child in children
+        for p in parents_map.get(child, ())
+        if p != var
+    }
+    return parents | children | co_parents
+
+
 def build_audit_prompt(
     complete_assignment: dict[str, str],
     evidence: dict[str, str],
@@ -393,28 +423,49 @@ def build_audit_prompt(
     metadata: dict[str, VariableMetadata],
     relationship_notes: dict[str, tuple[str, ...]] | None = None,
 ) -> str:
+    # Para cada hidden var: só a row selecionada + Markov blanket local
+    non_evidence_vars = [v for v in bn.variables if v not in evidence]
+    
+    audit_entries = {}
+    for var in non_evidence_vars:
+        blanket = _markov_blanket(var, bn)
+        msg = messages.get(var)
+        selected_value = complete_assignment.get(var)
+        matched_row = None
+        if msg and selected_value:
+            matched_row = next(
+                (r for r in msg.rows if r.selected_value == selected_value),
+                msg.rows[0] if msg.rows else None,
+            )
+
+        audit_entries[var] = {
+            "assigned_value": selected_value,
+            "legal_states": list(bn.variables[var].states),
+            "markov_blanket_assignment": {
+                neighbor: complete_assignment.get(neighbor)
+                for neighbor in blanket
+            },
+            "selected_row": {
+                "context": matched_row.context,
+                "selected_value": matched_row.selected_value,
+                "confidence": matched_row.confidence,
+                "rationale": matched_row.rationale,
+            } if matched_row else None,
+            "relationship_notes": list(relationship_notes.get(var, ())),
+        }
+
+    example_var = non_evidence_vars[0] if non_evidence_vars else next(iter(bn.variables))
+    example_states = states_pipe(bn.variables[example_var].states)
+    repair_example = (
+        f'{{"variable": "BIF_ID", "value": "{example_states}", "reason": "..."}}'
+    )
+
     payload = {
         "complete_assignment": complete_assignment,
         "fixed_evidence": evidence,
-        "network": network_payload(bn, metadata, evidence, relationship_notes or {}),
-        "decision_messages": {
-            variable: message.model_dump(mode="json")
-            for variable, message in messages.items()
-        },
+        "audit_entries": audit_entries,  # grafo local, sem replicar tudo
     }
-
-    non_evidence_vars = [v for v in bn.variables if v not in evidence]
-    example_var = non_evidence_vars[0] if non_evidence_vars else next(iter(bn.variables))
-    example_states = states_pipe(bn.variables[example_var].states)
-
-    schema = {
-        "accept": True,
-        "repair": None,
-        "reason": "short audit reason",
-    }
-    repair_example = (
-        f'{{\"variable\": \"BIF_ID\", \"value\": \"{example_states}\", \"reason\": \"...\"}}'
-    )
+    schema = {"accept": True, "repair": None, "reason": "short audit reason"}
 
     return (
         "Audit the complete assignment for semantic consistency with the fixed "
@@ -426,8 +477,8 @@ def build_audit_prompt(
         "one non-evidence variable to a different legal value. If there is one "
         "clear inconsistency, set accept=false and propose exactly one repair as "
         f"{repair_example}. "
-        "The value field must be one of the legal states listed in "
-        "network.state_meanings for the chosen variable. "
+        "The value field must be one of the legal_states listed in the "
+        "audit_entries for the chosen variable. "
         "Return JSON only.\n\n"
         f"Required JSON shape:\n{json_dumps(schema)}\n\n"
         f"Data:\n{json_dumps(payload)}"

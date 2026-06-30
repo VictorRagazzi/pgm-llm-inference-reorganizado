@@ -79,3 +79,25 @@ def run_batch(
 
                 else:
                     raise ValueError(f"Unknown inference mode {inference_mode}")
+
+def make_evidence_sizes(limit: int, sparse_threshold: int = 10) -> list[int]:
+    """
+    Retorna uma lista de evidence sizes para o experimento.
+
+    - Se limit <= sparse_threshold: range denso [1..limit].
+    - Se limit >  sparse_threshold: ~8 pontos esparsos linearmente espaçados,
+      sempre incluindo 1 e limit.
+    """
+    if limit <= sparse_threshold:
+        return list(range(1, limit + 1))
+
+    # ~8 pontos igualmente espaçados entre 1 e limit
+    n_points = 8
+    step = max(1, (limit - 1) // (n_points - 1))
+    sizes = list(range(1, limit + 1, step))
+
+    # Garante que limit está incluído (step pode não cair exatamente nele)
+    if sizes[-1] != limit:
+        sizes.append(limit)
+
+    return sizes

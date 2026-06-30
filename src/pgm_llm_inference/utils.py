@@ -9,11 +9,68 @@ across an experiment run.
 import ast
 import json
 import re
+import pickle
+from pathlib import Path
+from typing import TYPE_CHECKING
+from .mpe.compile import compile_semantic_messages   # ajuste o import
+
+if TYPE_CHECKING:
+    from .mpe.compile import CompiledSemanticMessages
 
 # Contador global de chamadas LLM, resetado manualmente entre experimentos
 # (ver scripts/main.py e scripts/main_single_run.py).
 llm_request_count = 0
 
+TABLES_DIR = Path(__file__).resolve().parents[1] / "tables"
+
+def _compiled_path(dataset_name: str) -> Path:
+    stem = Path(dataset_name).stem          # "hepar2.bif" → "hepar2"
+    TABLES_DIR.mkdir(parents=True, exist_ok=True)
+    return TABLES_DIR / f"{stem}.compiled.pkl"
+
+
+def load_or_compile(
+    dataset_name: str,
+    *,
+    network,
+    bif_path: Path,
+    metadata_path: Path,
+    relationship_path: Path,
+    llm_fn,
+    use_real_llm: bool,
+) -> "CompiledSemanticMessages":
+    """
+    Tenta carregar CompiledSemanticMessages de tables/<stem>.compiled.pkl.
+    Se não existir (ou estiver corrompido), compila e salva.
+    """
+    path = _compiled_path(dataset_name)
+
+    if path.exists():
+        print(f">>> [CACHE] Carregando tabelas compiladas de '{path.name}'...")
+        try:
+            with path.open("rb") as f:
+                compiled = pickle.load(f)
+            print(f">>> [CACHE] ✓ {len(compiled.messages)} mensagens carregadas do cache.")
+            return compiled
+        except Exception as e:
+            print(f">>> [CACHE] ⚠ Falha ao carregar cache ({e}), recompilando...")
+
+    compiled = compile_semantic_messages(
+        network=network,
+        bif_path=bif_path,
+        metadata_path=metadata_path,
+        relationship_path=relationship_path,
+        llm_fn=llm_fn,
+        use_real_llm=use_real_llm,
+    )
+    print(f">>> [COMPILE] ✓ {len(compiled.messages)} mensagens compiladas.")
+
+    print(f">>> [CACHE] Salvando em '{path}'...")
+    with path.open("wb") as f:
+        pickle.dump(compiled, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print(f">>> [CACHE] ✓ Salvo.")
+
+    return compiled
 
 def _extract_last_json_object(raw: str) -> dict:
     if not raw or not raw.strip():

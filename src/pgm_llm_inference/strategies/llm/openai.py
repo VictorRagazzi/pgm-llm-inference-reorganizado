@@ -68,7 +68,7 @@ def create_openai_llm_function(config: InferenceConfig) -> Callable[[str], str]:
                             ),
                         },
                         {"role": "user", "content": prompt}],
-                max_tokens=14000,
+                max_tokens=60000,
                 timeout=config.llm_timeout,
                 extra_body={
                     "reasoning": {
