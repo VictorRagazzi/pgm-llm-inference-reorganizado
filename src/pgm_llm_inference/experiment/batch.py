@@ -10,7 +10,6 @@ def run_batch(
     network,
     prompt_types,
     evidence_sizes,
-    query_sizes,
     n_trials,
     llm_fn,
     inference_mode: str,
@@ -25,6 +24,7 @@ def run_batch(
         seen: set[frozenset] = set()
 
         for trial in range(n_trials):
+            full_evidence = {}
             # Tenta gerar um full_evidence cujos subconjuntos fatiados
             # ainda não foram vistos para nenhum k_e
             for attempt in range(max_retries_per_trial):
@@ -56,29 +56,11 @@ def run_batch(
                 if k_e == 0 and trial > 0:
                     continue
 
-                if inference_mode == "map":
-                    for k_q in query_sizes:
-                        query_vars = sample_query_vars(
-                            network,
-                            k=k_q,
-                            forbidden_vars=set(evidence.keys()),
-                            rng=rng,
-                        )
-                        yield {
-                            "prompt_type": prompt_type,
-                            "evidence": evidence,
-                            "query_vars": query_vars,
-                        }
-
-                elif inference_mode == "mpe":
-                    yield {
-                        "prompt_type": prompt_type,
-                        "evidence": evidence,
-                        "query_vars": None,
-                    }
-
-                else:
-                    raise ValueError(f"Unknown inference mode {inference_mode}")
+                yield {
+                    "prompt_type": prompt_type,
+                    "evidence": evidence,
+                    "query_vars": None,
+                }
 
 def make_evidence_sizes(limit: int, sparse_threshold: int = 10) -> list[int]:
     """

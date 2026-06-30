@@ -40,31 +40,31 @@ from .graph import topological_order
 # ---------------------------------------------------------------------------
 
 @dataclass
-    class CompiledSemanticMessages:
-        """
-        Produto da fase de compilação (Bucket Elimination com evidence={}).
+class CompiledSemanticMessages:
+    """
+    Produto da fase de compilação (Bucket Elimination com evidence={}).
 
-        Campos
-        ------
-        messages          : dict  variable → SemanticMessage com todas as rows
-                            do produto cartesiano dos pais.
-        elimination_order : lista de variáveis na ordem de eliminação (reverso
-                            topológico), reutilizada em reconstruct_assignment.
-        briefing          : BriefingResponse gerado com evidence={}.
-        bn                : BayesianNetwork parseada do BIF.
-        alias_map         : mapeamento alias → variable_id (normalização de nomes).
-        metadata          : metadados por variável (display_name, expert_note etc.).
-        relationship_notes: notas de relacionamento qualitativo por variável.
-        traces            : histórico de chamadas LLM da fase de compilação.
-        """
-        messages: dict[str, SemanticMessage]
-        elimination_order: list[str]
-        briefing: BriefingResponse
-        bn: BayesianNetwork
-        alias_map: dict[str, str]
-        metadata: dict[str, VariableMetadata]
-        relationship_notes: dict[str, tuple[str, ...]]
-        traces: list[PromptTrace] = field(default_factory=list)
+    Campos
+    ------
+    messages          : dict  variable → SemanticMessage com todas as rows
+                        do produto cartesiano dos pais.
+    elimination_order : lista de variáveis na ordem de eliminação (reverso
+                        topológico), reutilizada em reconstruct_assignment.
+    briefing          : BriefingResponse gerado com evidence={}.
+    bn                : BayesianNetwork parseada do BIF.
+    alias_map         : mapeamento alias → variable_id (normalização de nomes).
+    metadata          : metadados por variável (display_name, expert_note etc.).
+    relationship_notes: notas de relacionamento qualitativo por variável.
+    traces            : histórico de chamadas LLM da fase de compilação.
+    """
+    messages: dict[str, SemanticMessage]
+    elimination_order: list[str]
+    briefing: BriefingResponse
+    bn: BayesianNetwork
+    alias_map: dict[str, str]
+    metadata: dict[str, VariableMetadata]
+    relationship_notes: dict[str, tuple[str, ...]]
+    traces: list[PromptTrace] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +196,7 @@ def compile_semantic_messages(
     briefing_prompt = build_network_briefing_prompt(
         bn, metadata, compile_evidence, relationship_notes
     )
-    briefing, trace = client.complete_json(
+    briefing, trace, _ = client.complete_json(
         purpose="network_briefing",
         variable=None,
         prompt=briefing_prompt,
@@ -235,17 +235,20 @@ def compile_semantic_messages(
                 )
             return _validate
 
-        response, trace = client.complete_json(
+        response, trace, domain_score = client.complete_json(
             purpose="bucket_argmax",
             variable=variable,
             prompt=prompt,
             response_model=BucketResponse,
             semantic_validator=_make_validator(bucket, alias_map),
+            logprobs_field="selected_value",
+            logprobs_states=bn.variables[variable].states,
         )
         traces.append(trace)
 
         message = semantic_message_from_response(
-            response, bucket, bn=bn, alias_map=alias_map, evidence=compile_evidence
+            response, bucket, bn=bn, alias_map=alias_map, evidence=compile_evidence,
+            domain_scores_list=domain_score,
         )
 
         if config.show_input_data:
@@ -253,6 +256,7 @@ def compile_semantic_messages(
                 f"         → evidence_driven={message.evidence_driven} "
                 f"| scope={message.scope} "
                 f"| rows={len(message.rows)}"
+                f"| domain_score={domain_score[0] if domain_score else 'None'}"
             )
 
         if message.evidence_driven:

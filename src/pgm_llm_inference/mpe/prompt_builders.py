@@ -109,7 +109,7 @@ def network_payload(
     bn: BayesianNetwork,
     metadata: dict[str, VariableMetadata],
     evidence: dict[str, str],
-    relationship_notes: dict[str, list[str]],
+    relationship_notes: dict[str, tuple[str, ...]] | None,
 ) -> dict[str, Any]:
     children = bn.children_map()
     topo = topological_order(bn)
@@ -200,9 +200,9 @@ def build_network_briefing_prompt(
     bn: BayesianNetwork,
     metadata: dict[str, VariableMetadata],
     evidence: dict[str, str],
-    relationship_notes: dict[str, list[str]] | None = None,
+    relationship_notes: dict[str, tuple[str, ...]] | None = None,
 ) -> str:
-    payload = network_payload(bn, metadata, evidence, relationship_notes or {})
+    payload = network_payload(bn, metadata, evidence, relationship_notes)
     intermediate_instruction = _build_intermediate_state_instruction(bn, metadata)
 
     return (
@@ -451,7 +451,7 @@ def build_audit_prompt(
                 "confidence": matched_row.confidence,
                 "rationale": matched_row.rationale,
             } if matched_row else None,
-            "relationship_notes": list(relationship_notes.get(var, ())),
+            "relationship_notes": list((relationship_notes or {}).get(var, ())),
         }
 
     example_var = non_evidence_vars[0] if non_evidence_vars else next(iter(bn.variables))

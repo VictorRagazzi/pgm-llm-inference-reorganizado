@@ -15,19 +15,19 @@ def sample_random_evidence(
     Resamples until the evidence is internally consistent according to the
     network's joint probability (or until max_attempts is reached).
     """
-    rng = rng or random # type: ignore
     forbidden_vars = forbidden_vars or set()
-
+    actual_rng = rng if rng is not None else random._inst
     candidates = [
         v for v in network.variables.values()
         if v.name not in forbidden_vars
     ]
     k = min(k, len(candidates))
+    evidence: dict[str, str] = {}
 
     for attempt in range(max_attempts):
-        chosen_vars = rng.sample(candidates, k)
+        chosen_vars = actual_rng.sample(candidates, k)
         evidence = {
-            v.name: rng.choice(v.domain)
+            v.name: actual_rng.choice(v.domain)
             for v in chosen_vars
         }
 
@@ -51,7 +51,7 @@ def sample_query_vars(
     """
     Sample k query variables not in evidence.
     """
-    rng = rng or random
+    rng = rng if rng is not None else random._inst
 
     candidates = [
         v.name for v in network.variables.values()
@@ -129,6 +129,7 @@ def sample_mpe_consistent_evidence(
 ) -> dict[str, str]:
     seen = seen if seen is not None else set()
 
+    result = {}
     for _ in range(max_retries):
         result = _sample_once(network, k, forbidden_vars, rng, bias_toward, bias_prob)
         key = frozenset(result.items())
@@ -147,7 +148,7 @@ def _sample_once(
     bias_toward: str = "roots",   # padrão agora é "roots"
     bias_prob: float = 1.0,
 ) -> dict[str, str]:
-    rng = rng or random
+    rng = rng if rng is not None else random._inst
     forbidden_vars = forbidden_vars or set()
 
     candidates = [

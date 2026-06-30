@@ -22,7 +22,7 @@ from pydantic import BaseModel, ValidationError
 import httpx
 
 from ..core.config import InferenceConfig
-from .types import LLMAttempt, PromptTrace
+from .types import LLMAttempt, PromptTrace, DomainScores
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
@@ -112,7 +112,9 @@ class LLMJsonClient:
         prompt: str,
         response_model: type[TModel],
         semantic_validator: Callable[[TModel], None] | None = None,
-    ) -> tuple[TModel, PromptTrace]:
+        logprobs_field: str | None = None,
+        logprobs_states: tuple[str, ...] | None = None,
+    ) -> tuple[TModel, PromptTrace, list[DomainScores]]:
         if self.dry_run:
             raise RuntimeError("complete_json não pode ser chamado em modo dry-run.")
         if self._client is None:
@@ -133,6 +135,7 @@ class LLMJsonClient:
  
             response_text: str | None = None
             parsed: dict[str, Any] | None = None
+            domain_scores_list: list[DomainScores] = []
  
             try:
                 call_kwargs: dict[str, Any] = {
@@ -149,8 +152,18 @@ class LLMJsonClient:
                         {"role": "user", "content": request_prompt},
                     ],
                     "timeout": httpx.Timeout(2400.0, connect=30.0),
+                    # "extra_body": {
+                    #     "provider": {
+                    #         "order": ["DeepInfra", "Together"], 
+                    #         "allow_fallbacks": False
+                    #     }
+                    # },
                     "temperature": self.config.openai_temperature,
                 }
+                if logprobs_field and logprobs_states:
+                    call_kwargs["logprobs"] = True
+                    call_kwargs["top_logprobs"] = min(20, max(5, len(logprobs_states) + 3))
+
  
                 # json_object só é solicitado para modelos que suportam — o LM Studio
                 # suporta para a maioria dos modelos recentes, mas pode ser desabilitado
@@ -160,6 +173,13 @@ class LLMJsonClient:
  
                 completion = self._client.chat.completions.create(**call_kwargs)
                 response_text = completion.choices[0].message.content or ""
+
+                if logprobs_field and logprobs_states:
+                    lp = getattr(completion.choices[0], "logprobs", None)
+                    domain_scores_list = extract_domain_scores(
+                        response_text, lp.content if lp else [],
+                        field_name=logprobs_field, states=logprobs_states,
+                    )
  
                 if self.config.show_llm_output:
                     print(
@@ -180,7 +200,7 @@ class LLMJsonClient:
                         parsed_response=parsed,
                     )
                 )
-                return model, trace
+                return model, trace, domain_scores_list
  
             except (json.JSONDecodeError, ValidationError, ValueError) as error:
                 trace.attempts.append(
@@ -199,4 +219,82 @@ class LLMJsonClient:
  
         last_error = trace.attempts[-1].error if trace.attempts else "unknown error"
         raise ValueError(f"LLM response failed validation: {last_error}")
- 
+
+def _token_offsets(tokens: list[str]) -> list[tuple[int, int]]:
+    offsets, pos = [], 0
+    for tok in tokens:
+        offsets.append((pos, pos + len(tok)))
+        pos += len(tok)
+    return offsets
+
+
+def extract_domain_scores(
+    response_text: str,
+    logprob_content: list[Any],
+    *,
+    field_name: str,
+    states: tuple[str, ...],
+    default_score: float = -50.0,
+) -> list[DomainScores]:
+    """
+    Para cada ocorrência de `"<field_name>": "valor"` no texto bruto da
+    resposta, retorna {estado: probabilidade_normalizada} a partir do top_logprobs.
+    """
+    if not logprob_content:
+        return []
+
+    import math 
+    tokens = [t.token for t in logprob_content]
+    offsets = _token_offsets(tokens)
+    pattern = re.compile(rf'"{re.escape(field_name)}"\s*:\s*"')
+
+    results: list[DomainScores] = []
+    for match in pattern.finditer(response_text):
+        value_start = match.end()
+        idx = next((i for i, (s, e) in enumerate(offsets) if s <= value_start < e), None)
+        if idx is None:
+            results.append(DomainScores(by_state={}, default_score=0.0)) # Probabilidade padrão zero
+            continue
+
+        entry = logprob_content[idx]
+        candidates = {entry.token.strip().upper(): entry.logprob}
+        for alt in entry.top_logprobs or []:
+            candidates.setdefault(alt.token.strip().upper(), alt.logprob)
+
+        # 1. Coleta os logprobs brutos dos estados
+        raw_logprobs: dict[str, float] = {}
+        for state in states:
+            key = state.strip().upper()
+            hit = next((lp for tok, lp in candidates.items()
+                        if tok.startswith(key[:len(tok)]) or key.startswith(tok)), None)
+            if hit is not None:
+                raw_logprobs[state] = hit
+            else:
+                raw_logprobs[state] = default_score # -50.0 representa um logprob muito baixo
+
+        # 2. Aplica o exponencial e normaliza (com estabilidade numérica)
+        scores: dict[str, float] = {}
+        if raw_logprobs:
+            max_logprob = max(raw_logprobs.values())
+            
+            # Calcula as exponenciais parciais (subtraindo o max para evitar overflow)
+            unnormalized_probs = {
+                state: math.exp(lp - max_logprob) 
+                for state, lp in raw_logprobs.items()
+            }
+            
+            sum_probs = sum(unnormalized_probs.values())
+            
+            # Normaliza para que a soma seja 1.0
+            if sum_probs > 0:
+                scores = {
+                    state: p / sum_probs 
+                    for state, p in unnormalized_probs.items()
+                }
+            else:
+                # Caso extremo de fallback onde tudo sumou zero
+                scores = {state: 1.0 / len(states) for state in states}
+
+        results.append(DomainScores(by_state=scores, default_score=0.0))
+
+    return results

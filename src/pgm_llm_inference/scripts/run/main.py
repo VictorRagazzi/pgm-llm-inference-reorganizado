@@ -16,7 +16,6 @@ from pgm_llm_inference.experiment.llm_factory import get_model_name
 # re-exportado de runners para o TRUE MPE
 from pgm_llm_inference.experiment.experiment import run_max_product
 
-MAP = "map"
 MPE = "mpe"
 
 
@@ -52,11 +51,6 @@ class ExperimentConfig:
     query_sizes: List[int] = field(default_factory=lambda: [1])
     n_trials: int = 3
     max_estimated_llm_calls: int = 300
-
-    def __post_init__(self):
-        if self.inference_mode not in (MAP, MPE):
-            raise ValueError(f"Invalid mode: {self.inference_mode}")
-
 
 # ---------------------------------------------------------------------------
 # Funções de execução
@@ -170,11 +164,11 @@ def run_experiment(
 
 def main():
     datasets = [
-        # "gonorrhoeae.bif",
-        # "diabets.bif",
+        "gonorrhoeae.bif",
+        "diabets.bif",
         # "aspergillus.bif",
         # "adhd.bif",
-        "munin1.bif",
+        # "munin1.bif",
         # "hepar2.bif",
 
         # "cryptocurrency.bif",
@@ -189,7 +183,6 @@ def main():
     cfg = ExperimentConfig(
         dataset_name="",
         prompt_types=["variable_assignment"],
-        query_sizes=[1, 2],
     )
 
     llm_fn = build_llm_fn(use_real_llm=cfg.use_real_llm, use_local_llm=cfg.use_local_llm)
@@ -236,7 +229,6 @@ def main():
             network=network,
             prompt_types=cfg.prompt_types,
             evidence_sizes=current_evidence_sizes,
-            query_sizes=cfg.query_sizes,
             n_trials=cfg.n_trials,
             inference_mode=cfg.inference_mode,
             llm_fn=llm_fn,
@@ -254,7 +246,6 @@ def main():
                 )
 
                 log_experiment(log_data)
-                # log_experiment_csv(log_data)
 
             except Exception as e:
                 print(f"❌ Error in {name}: {e}")

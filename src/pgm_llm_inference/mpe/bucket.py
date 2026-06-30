@@ -23,6 +23,7 @@ from .types import (
     ContextEvidenceMessage,
     MessageRow,
     SemanticMessage,
+    DomainScores,
 )
 
 
@@ -154,6 +155,7 @@ def semantic_message_from_response(
     bn: BayesianNetwork,
     alias_map: dict[str, str],
     evidence: dict[str, str],
+    domain_scores_list: list[DomainScores] = [],
 ) -> SemanticMessage:
     response_variable = resolve_variable(response.variable, alias_map)
     if response_variable != bucket.variable:
@@ -229,8 +231,16 @@ def semantic_message_from_response(
     if not response.decisions:
         raise ValueError(f"Hidden response for {bucket.variable} has no decisions.")
 
+    if domain_scores_list and len(domain_scores_list) != len(response.decisions):
+        raise ValueError(
+            f"domain_scores_list length ({len(domain_scores_list)}) does not match "
+            f"decisions length ({len(response.decisions)}) for {bucket.variable}."
+        )
+
     normalized_decisions: list[ContextDecision] = []
-    for row in response.decisions:
+    decision_scores: list[DomainScores | None] = []  # paralelo a normalized_decisions
+
+    for i, row in enumerate(response.decisions):
         canonical = domain_upper.get(row.selected_value.strip().upper())
         if canonical is None:
             allowed = ", ".join(domain)
@@ -251,6 +261,8 @@ def semantic_message_from_response(
                 rationale=row.rationale,
             )
         )
+        decision_scores.append(domain_scores_list[i] if domain_scores_list else None)
+
 
     if not contexts_match(
         [row.context for row in normalized_decisions],
@@ -262,6 +274,11 @@ def semantic_message_from_response(
             "decision for each requested context row."
         )
 
+    paired = sorted(
+        zip(normalized_decisions, decision_scores),
+        key=lambda item: context_key(item[0].context, bucket.separator),
+    )
+    
     return SemanticMessage(
         source_variable=bucket.variable,
         scope=bucket.separator,
@@ -269,14 +286,12 @@ def semantic_message_from_response(
         evidence_driven=bucket_has_evidence_pressure(bucket, bn, evidence),
         rows=[
             MessageRow(
-                context=row.context,
-                selected_value=row.selected_value,
-                confidence=row.confidence,
-                rationale=row.rationale,
+                context=decision.context,
+                selected_value=decision.selected_value,
+                confidence=decision.confidence,
+                rationale=decision.rationale,
+                domain_scores=score,
             )
-            for row in sorted(
-                normalized_decisions,
-                key=lambda item: context_key(item.context, bucket.separator),
-            )
+            for decision, score in paired
         ],
     )

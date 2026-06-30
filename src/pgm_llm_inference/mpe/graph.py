@@ -236,7 +236,7 @@ def local_relationship_notes(
 
 def relationship_notes_payload(
     bn: BayesianNetwork,
-    relationship_notes: dict[str, list[str]] | None = None,
+    relationship_notes: dict[str, tuple[str, ...]] | None = None,
 ) -> list[dict[str, Any]]:
     if relationship_notes:
         return [

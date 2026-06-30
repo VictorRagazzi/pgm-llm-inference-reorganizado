@@ -77,6 +77,7 @@ def infer_from_compiled(
         elimination_order=elimination_order,
         evidence=norm_evidence,
         messages=messages,
+        bn=bn,
     )
 
     if config.show_input_data:
@@ -86,83 +87,83 @@ def infer_from_compiled(
     client = LLMJsonClient(config, use_real_llm=use_real_llm)
 
     # --- Reconstruction prompt (LLM explica o assignment) ---
-    if config.show_input_data:
-        print("\n[INFER] Reconstruction prompt...")
+    # if config.show_input_data:
+    #     print("\n[INFER] Reconstruction prompt...")
 
-    reconstruction_prompt = build_reconstruction_prompt(
-        hidden_assignment=hidden_assignment,
-        complete_assignment=complete_assignment,
-        evidence=norm_evidence,
-        messages=messages,
-        bn=bn,
-        metadata=metadata,
-        relationship_notes=relationship_notes,
-    )
-    reconstruction, _ = client.complete_json(
-        purpose="reconstruction",
-        variable=None,
-        prompt=reconstruction_prompt,
-        response_model=ReconstructionResponse,
-        semantic_validator=lambda model: validate_reconstruction_response(
-            model,
-            hidden_assignment=hidden_assignment,
-            complete_assignment=complete_assignment,
-            bn=bn,
-            alias_map=alias_map,
-        ),
-    )
+    # reconstruction_prompt = build_reconstruction_prompt(
+    #     hidden_assignment=hidden_assignment,
+    #     complete_assignment=complete_assignment,
+    #     evidence=norm_evidence,
+    #     messages=messages,
+    #     bn=bn,
+    #     metadata=metadata,
+    #     relationship_notes=relationship_notes,
+    # )
+    # reconstruction, _, _ = client.complete_json(
+    #     purpose="reconstruction",
+    #     variable=None,
+    #     prompt=reconstruction_prompt,
+    #     response_model=ReconstructionResponse,
+    #     semantic_validator=lambda model: validate_reconstruction_response(
+    #         model,
+    #         hidden_assignment=hidden_assignment,
+    #         complete_assignment=complete_assignment,
+    #         bn=bn,
+    #         alias_map=alias_map,
+    #     ),
+    # )
 
-    if config.show_input_data:
-        print("  ✓ Reconstruction validada")
+    # if config.show_input_data:
+    #     print("  ✓ Reconstruction validada")
 
-    # --- Audit (LLM audita consistência semântica) ---
-    if config.show_input_data:
-        print("\n[INFER] Auditoria final...")
+    # # --- Audit (LLM audita consistência semântica) ---
+    # if config.show_input_data:
+    #     print("\n[INFER] Auditoria final...")
 
-    audit_prompt = build_audit_prompt(
-        complete_assignment=complete_assignment,
-        evidence=norm_evidence,
-        messages=messages,
-        bn=bn,
-        metadata=metadata,
-        relationship_notes=relationship_notes,
-    )
-    audit, _ = client.complete_json(
-        purpose="final_audit",
-        variable=None,
-        prompt=audit_prompt,
-        response_model=AuditResponse,
-        semantic_validator=lambda model: validate_audit_response(
-            model,
-            bn=bn,
-            evidence=norm_evidence,
-            complete_assignment=complete_assignment,
-            alias_map=alias_map,
-        ),
-    )
+    # audit_prompt = build_audit_prompt(
+    #     complete_assignment=complete_assignment,
+    #     evidence=norm_evidence,
+    #     messages=messages,
+    #     bn=bn,
+    #     metadata=metadata,
+    #     relationship_notes=relationship_notes,
+    # )
+    # audit, _, _ = client.complete_json(
+    #     purpose="final_audit",
+    #     variable=None,
+    #     prompt=audit_prompt,
+    #     response_model=AuditResponse,
+    #     semantic_validator=lambda model: validate_audit_response(
+    #         model,
+    #         bn=bn,
+    #         evidence=norm_evidence,
+    #         complete_assignment=complete_assignment,
+    #         alias_map=alias_map,
+    #     ),
+    # )
 
-    if config.show_input_data:
-        print(f"  ✓ Auditoria concluída — accept={audit.accept}")
-        if not audit.accept and getattr(audit, "repair", None):
-            print(f"  ⚠ Reparo sugerido: {audit.repair}")
+    # if config.show_input_data:
+    #     print(f"  ✓ Auditoria concluída — accept={audit.accept}")
+    #     if not audit.accept and getattr(audit, "repair", None):
+    #         print(f"  ⚠ Reparo sugerido: {audit.repair}")
 
-    # --- Audit repair ---
-    if apply_audit_repair_enabled:
-        complete_assignment = apply_audit_repair(
-            audit,
-            complete_assignment=complete_assignment,
-            evidence=norm_evidence,
-            bn=bn,
-            alias_map=alias_map,
-        )
-        hidden_assignment = {
-            var: val
-            for var, val in complete_assignment.items()
-            if var not in norm_evidence
-        }
+    # # --- Audit repair ---
+    # if apply_audit_repair_enabled:
+    #     complete_assignment = apply_audit_repair(
+    #         audit,
+    #         complete_assignment=complete_assignment,
+    #         evidence=norm_evidence,
+    #         bn=bn,
+    #         alias_map=alias_map,
+    #     )
+    #     hidden_assignment = {
+    #         var: val
+    #         for var, val in complete_assignment.items()
+    #         if var not in norm_evidence
+    #     }
 
-        if config.show_input_data:
-            print(f"  ✓ Assignment final: {hidden_assignment}")
+    #     if config.show_input_data:
+    #         print(f"  ✓ Assignment final: {hidden_assignment}")
 
     # CPT gerada pelo LLM (para logging / análise downstream)
     llm_cpt: dict[str, list] = {

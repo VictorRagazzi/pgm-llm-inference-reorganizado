@@ -78,6 +78,7 @@ class MessageRow(BaseModel):
     observed_value: str | None = None
     compatibility: str | None = None
     confidence: str | None = None
+    domain_scores: DomainScores | None = None
     rationale: str
 
 
@@ -99,6 +100,27 @@ class BucketSpec(BaseModel):
     incoming_messages: list[SemanticMessage]
 
 
+class DomainScores(BaseModel):
+    """
+    Scores (probs) por estado do domínio de uma variável, para uma
+    única linha de contexto. Produzido na Fase 1 a partir do top_logprobs
+    da API; consumido no upward pass (Fase 2) para max-product aritmético.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    by_state: dict[str, float]
+    default_score: float = -50.0
+
+    def get(self, state: str) -> float:
+        """Score do estado, ou default_score se nunca apareceu no top_logprobs."""
+        return self.by_state.get(state, self.default_score)
+
+    def missing(self, domain: tuple[str, ...]) -> tuple[str, ...]:
+        """Estados do domínio sem score real (vão cair no default_score)."""
+        return tuple(state for state in domain if state not in self.by_state)
+
+    def best(self) -> tuple[str, float]:
+        return max(self.by_state.items(), key=lambda kv: kv[1])
 # ---------------------------------------------------------------------------
 # Tipos de resposta LLM
 # ---------------------------------------------------------------------------
