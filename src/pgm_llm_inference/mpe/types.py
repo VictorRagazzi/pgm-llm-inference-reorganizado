@@ -88,6 +88,8 @@ class SemanticMessage(BaseModel):
     evidence_driven: bool = False
     rows: list[MessageRow]
 
+class DomainScores:
+    pass
 
 class BucketSpec(BaseModel):
     variable: str
