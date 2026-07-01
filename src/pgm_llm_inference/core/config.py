@@ -32,8 +32,8 @@ class InferenceConfig(BaseSettings):
     openai_api_key: str | None = None
     openai_base_url: str | None = "https://openrouter.ai/api/v1"
     # openai_model: str = "anthropic/claaaauuuuudeeee-sooooonneeeeet-4.6"
-    openai_model: str = "deepseek/deepseek-chat"
-    # openai_model: str = "gpt-5.4-mini"
+    # openai_model: str = "deepseek/deepseek-chat"
+    openai_model: str = "gpt-5.4-mini"
     openai_temperature: float = 0.0
     openai_max_retries: int = 2
     openai_use_json_response_format: bool = True

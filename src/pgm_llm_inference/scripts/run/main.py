@@ -165,7 +165,7 @@ def run_experiment(
 def main():
     datasets = [
         "gonorrhoeae.bif",
-        "diabets.bif",
+        # "diabets.bif",
         # "aspergillus.bif",
         # "adhd.bif",
         # "munin1.bif",
