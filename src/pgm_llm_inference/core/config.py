@@ -6,7 +6,7 @@ class InferenceConfig(BaseSettings):
     # Logging
     verbose: bool = False
     log_level: str = "INFO"
-    log_file_name: str = "logs/last_2.jsonl"
+    log_file_name: str = "logs/no_expert_notes.jsonl"
     # log_file_name: str = "logs/gpt_5_4_mini.jsonl"
 
     # Numerical stability
@@ -32,7 +32,7 @@ class InferenceConfig(BaseSettings):
     openai_api_key: str | None = None
     openai_base_url: str | None = "https://openrouter.ai/api/v1"
     # openai_model: str = "anthropic/claaaauuuuudeeee-sooooonneeeeet-4.6"
-    openai_model: str = "deepseek/deepseek-chat"
+    openai_model: str = "deepseek/deepseek-v4-flash"
     # openai_model: str = "gpt-5.4-mini"
     openai_temperature: float = 0.0
     openai_max_retries: int = 2
