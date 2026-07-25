@@ -6,7 +6,7 @@ class InferenceConfig(BaseSettings):
     # Logging
     verbose: bool = False
     log_level: str = "INFO"
-    log_file_name: str = "logs/no_expert_notes.jsonl"
+    log_file_name: str = "logs/part_2.jsonl"
     # log_file_name: str = "logs/gpt_5_4_mini.jsonl"
 
     # Numerical stability
