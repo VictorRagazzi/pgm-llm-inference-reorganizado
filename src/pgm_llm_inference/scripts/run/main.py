@@ -113,11 +113,28 @@ class ExperimentConfig:
 
 
 CONFIG = ExperimentConfig(
-    datasets=["gonorrhoeae.bif"],
-    pipeline=PART1,          # <- troque para PART2_FORWARD ou PART2_TWOPASS aqui
-    n_trials=3,
+    datasets=[
+        # "diabets.bif",
+        # "aspergillus.bif",
+        # "adhd.bif",
+        # "munin1.bif",
+        # "hepar2.bif",
+        # "asia.bif",
+        # "gonorrhoeae.bif",
+        # "insurance.bif",
+        # "crimescene.bif",
+        # "cryptocurrency.bif",
+        # "coral1.bif",
+        # "sachs.bif",
+        "test.bif",
+        # "coronary.bif",
+        ],
+    # pipeline=PART1,
+    # pipeline=PART2_FORWARD,
+    pipeline=PART2_TWOPASS,
+    n_trials=5,
     evidence_sizes=None,     # ou, por ex., [1, 2, 3, 5, 8]
-    evidence_size_ratio=0.5,
+    evidence_size_ratio=0.65,
     query_sizes=[1, 2],
 )
 

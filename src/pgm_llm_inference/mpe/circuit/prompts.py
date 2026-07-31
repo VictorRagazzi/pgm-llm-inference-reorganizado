@@ -20,7 +20,7 @@ from ..prompt_builders import (
     variable_payload,
 )
 from ..state_semantics import network_state_meanings
-from ..types import VariableMetadata
+from ..types import BriefingResponse, VariableMetadata
 
 
 def build_factor_prompt(
@@ -29,12 +29,14 @@ def build_factor_prompt(
     metadata: dict[str, VariableMetadata],
     relationship_notes: dict[str, tuple[str, ...]],
     context_rows: list[dict[str, str]],
+    briefing: BriefingResponse | None = None,
 ) -> str:
     children = bn.children_map()
     states = list(bn.variables[variable].states)
 
     payload: dict[str, Any] = {
         "task": "semantic_local_factor_ranking",
+        "network_briefing": briefing.model_dump(mode="json") if briefing else None,
         "variable": variable_payload(variable, bn, metadata, children),
         "candidate_states": states,
         "state_meanings": network_state_meanings(bn, metadata).get(variable, {}),

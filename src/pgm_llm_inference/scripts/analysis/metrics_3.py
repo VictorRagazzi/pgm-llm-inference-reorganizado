@@ -233,6 +233,45 @@ def compute_grouped_accuracies(
 
     return pd.DataFrame(results)
 
+def _pipeline_column(df: pd.DataFrame) -> pd.Series:
+    """Fallback pra logs antigos que ainda não tinham o campo 'pipeline'."""
+    if "pipeline" in df.columns:
+        return df["pipeline"].fillna("part1")
+    return pd.Series(["part1"] * len(df), index=df.index)
+
+def compute_grouped_accuracies_by_pipeline(
+    df: pd.DataFrame,
+    resolution: int = 5,
+    agent_weights: Optional[list[float]] = None,
+) -> pd.DataFrame:
+    """Igual a compute_grouped_accuracies, mas agrupando por pipeline em vez de dataset."""
+    df = df.copy()
+    df["_pipeline"] = _pipeline_column(df)
+    records = df.to_dict("records")
+    groups: dict[tuple, list] = {}
+
+    for row in records:
+        key = (row["_pipeline"], frozen_evidence(row.get("evidence")))
+        groups.setdefault(key, []).append(row)
+
+    results = []
+    for (pipeline, _), rows in groups.items():
+        acc = calc_group_accuracy(rows, agent_weights=agent_weights)
+        rep = rows[0]
+
+        ev_len   = rep.get("evidence_length", 0)
+        eval_len = rep.get("evaluated_length", 0)
+        total     = ev_len + eval_len
+        raw_ratio = (ev_len / total * 100) if total > 0 else 0
+        binned_ratio = round(raw_ratio / resolution) * resolution
+
+        results.append({
+            "pipeline":       pipeline,
+            "evidence_ratio": binned_ratio,
+            "accuracy":       acc,
+        })
+
+    return pd.DataFrame(results)
 
 # ─────────────────────────────────────────────
 #  PLOTS
@@ -287,7 +326,7 @@ def plot_grouped_accuracy(
             ax.bar_label(container, fmt="%.1f%%", padding=3, fontsize=LABEL_FS)
 
         ax.set_title(
-            "Accuracy of the Experiments by Dataset",
+            "Accuracy of the Experiments by dataset",
             fontsize=TITLE_FS, fontweight="bold", pad=10
         )
         ax.set_ylabel("Accuracy (%)", fontsize=AXIS_FS)
@@ -371,409 +410,77 @@ def plot_grouped_accuracy(
         plt.tight_layout()
         plt.show()
 
+def plot_pipeline_accuracy(
+    df: pd.DataFrame,
+    agent_weights: Optional[list[float]] = None,
+):
+    """
+    Mesmo estilo de plot_grouped_accuracy, mas comparando PIPELINES entre
+    si (part1 vs part2_forward vs part2_twopass) em vez de datasets —
+    a média de cada execução, lado a lado (E2.3).
+    """
+    grouped = compute_grouped_accuracies_by_pipeline(df, agent_weights=agent_weights)
+    grouped["accuracy_pct"] = grouped["accuracy"] * 100
+    pipelines = sorted(grouped["pipeline"].unique())
 
-def plot_dataset_accuracy(df, datasets_per_img=5):
-    df = df.copy()
+    BAR_COLOR, EDGE_COLOR, GRID_COLOR = "#2C6E9E", "#1A3F5C", "#CCCCCC"
+    LABEL_FS, TITLE_FS, AXIS_FS = 8, 11, 9
 
-    df['has_context'] = df['context_type'].apply(
-        lambda x: 'Com contexto' if pd.notnull(x) and x != 'null' else 'Sem contexto'
+    sns.set_theme(style="whitegrid", rc={
+        "axes.spines.top": False, "axes.spines.right": False,
+        "grid.color": GRID_COLOR, "grid.linewidth": 0.6,
+    })
+
+    # ── Gráfico 1: acurácia média geral por pipeline ────────────────────
+    fig, ax = plt.subplots(figsize=(max(6, len(pipelines) * 2), 5))
+    overall = (
+        grouped.groupby("pipeline")["accuracy_pct"]
+        .mean()
+        .reindex(pipelines)
+        .reset_index()
     )
-    df['prompt_group'] = df['prompt_type'] + " (" + df['has_context'] + ")"
-
-    base_orders    = ['expert_1', 'expert_2', 'expert_3', 'expert_4', 'expert_5', 'expert_6']
-    context_orders = ['Com contexto', 'Sem contexto']
-    desired_order  = [f"{p} ({c})" for c in context_orders for p in base_orders]
-    existing_order = [item for item in desired_order if item in df['prompt_group'].unique()]
-
-    df['prompt_group'] = pd.Categorical(df['prompt_group'], categories=existing_order, ordered=True)
-
-    datasets   = df['dataset'].unique()
-    num_chunks = (len(datasets) + datasets_per_img - 1) // datasets_per_img
-
-    for i in range(num_chunks):
-        start          = i * datasets_per_img
-        chunk_datasets = datasets[start:start + datasets_per_img]
-        subset         = df[df['dataset'].isin(chunk_datasets)].copy()
-
-        plt.figure(figsize=(14, 7))
-        sns.set_theme(style="whitegrid", palette="muted")
-
-        ax = sns.barplot(
-            data=subset,
-            x='dataset', y='log_accuracy',
-            hue='prompt_group', hue_order=existing_order,
-            palette='viridis', edgecolor='black', linewidth=0.5, errorbar=None
-        )
-
-        for container in ax.containers:
-            ax.bar_label(container, fmt='%.2f', padding=3, fontsize=9)
-
-        plt.title('Acurácia média por dataset', fontsize=18, fontweight='bold', pad=25)
-        plt.ylabel('Acurácia (Log Scale)', fontsize=13)
-        plt.xlabel('Dataset', fontsize=13)
-        plt.ylim(0, 1.15)
-        plt.legend(title='Configuração de Prompt', title_fontsize=12, loc='upper right', framealpha=0.9)
-        plt.tight_layout()
-        plt.show()
-
-
-def plot_global_average_accuracy(df):
-    df = df.copy()
-
-    df['has_context']  = df['context_type'].apply(
-        lambda x: 'With Context' if pd.notnull(x) and x != 'null' else 'No Context'
+    sns.barplot(
+        data=overall, x="pipeline", y="accuracy_pct",
+        color=BAR_COLOR, edgecolor=EDGE_COLOR, linewidth=0.6, ax=ax,
     )
-    df['config_label'] = df['prompt_type'] + " (" + df['has_context'] + ")"
-
-    df_balanced = df.groupby(['dataset', 'config_label'])['log_accuracy'].mean().reset_index()
-
-    base_orders    = ['expert_1', 'expert_2', 'expert_3', 'expert_4', 'expert_5', 'expert_6']
-    context_orders = ['With Context', 'No Context']
-    ordered_labels = [f"{p} ({c})" for c in context_orders for p in base_orders]
-    existing_labels = [l for l in ordered_labels if l in df_balanced['config_label'].unique()]
-
-    plt.figure(figsize=(12, 7))
-    sns.set_theme(style="white")
-
-    ax = sns.barplot(
-        data=df_balanced,
-        x='config_label', y='log_accuracy',
-        order=existing_labels, palette='viridis',
-        capsize=.05, errorbar=('ci', 95)
-    )
-
-    plt.title('Balanced Global Accuracy (Mean of Dataset Means)', fontsize=16, fontweight='bold', pad=25)
-    plt.ylabel('Balanced Accuracy', fontsize=12)
-
     for container in ax.containers:
-        ax.bar_label(container, fmt='%.2f', padding=8, fontweight='bold')
+        ax.bar_label(container, fmt="%.1f%%", padding=3, fontsize=LABEL_FS)
 
-    sns.despine()
+    ax.set_title("Mean Accuracy by Pipeline", fontsize=TITLE_FS, fontweight="bold", pad=10)
+    ax.set_ylabel("Accuracy (%)", fontsize=AXIS_FS)
+    ax.set_xlabel("Pipeline", fontsize=AXIS_FS)
+    ax.set_ylim(0, 115)
+    ax.tick_params(axis="both", labelsize=LABEL_FS)
+    ax.yaxis.grid(True, linestyle="--", alpha=0.5)
+    ax.set_axisbelow(True)
     plt.tight_layout()
     plt.show()
 
+    # ── Gráfico 2: acurácia média por evidence_ratio, uma linha por pipeline ──
+    fig, ax = plt.subplots(figsize=(9, 5))
+    palette = sns.color_palette("tab10", n_colors=len(pipelines))
 
-def plot_accuracy_by_evidence_per_dataset(df, datasets_per_img=6):
-    df = df.copy()
-    df['evidence_pct_num'] = 100 * df['evidence_length'] / (df['evidence_length'] + df['evaluated_length'])
-
-    datasets   = df['dataset'].unique()
-    num_chunks = (len(datasets) + datasets_per_img - 1) // datasets_per_img
-
-    sns.set_theme(style="white")
-
-    for i in range(num_chunks):
-        start          = i * datasets_per_img
-        chunk_datasets = datasets[start:start + datasets_per_img]
-
-        cols      = 2
-        rows      = math.ceil(len(chunk_datasets) / cols)
-        fig, axes = plt.subplots(rows, cols, figsize=(16, 5 * rows),
-                                 gridspec_kw={'hspace': 0.4, 'wspace': 0.2})
-        axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
-
-        for idx, ds_name in enumerate(chunk_datasets):
-            ax     = axes_flat[idx]
-            subset = df[df['dataset'] == ds_name].sort_values('evidence_pct_num')
-
-            sns.lineplot(
-                data=subset, x='evidence_pct_num', y='log_accuracy',
-                marker='o', markersize=8, linewidth=3, ax=ax,
-                color='#1a5276', label='Mean Accuracy' if idx == 0 else ""
-            )
-
-            summary = subset.groupby('evidence_pct_num')['log_accuracy'].mean().reset_index()
-            ax.fill_between(summary['evidence_pct_num'], summary['log_accuracy'], color='#1a5276', alpha=0.1)
-
-            ax.set_title(f'Dataset: {ds_name}', fontsize=14, fontweight='bold', pad=12)
-            ax.set_ylim(0, 1.1)
-            ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0f}%'))
-            sns.despine(ax=ax)
-            ax.grid(axis='y', linestyle='--', alpha=0.7)
-            ax.set_xlabel('')
-            ax.set_ylabel('')
-
-        for j in range(idx + 1, len(axes_flat)):
-            axes_flat[j].axis('off')
-
-        fig.text(0.04, 0.5, 'Accuracy (Log)', va='center', rotation='vertical', fontsize=15, fontweight='bold')
-        fig.text(0.5, 0.05, 'Evidence Proportion (Context / Total Length)', ha='center', fontsize=15, fontweight='bold')
-        fig.suptitle(f'Impact of Evidence Length on Performance - Batch {i+1}',
-                     fontsize=20, fontweight='bold', y=0.98)
-        plt.subplots_adjust(left=0.08, bottom=0.12, right=0.95, top=0.90)
-        plt.show()
-
-
-def plot_global_accuracy_by_evidence(df):
-    df = df.copy()
-    df['evidence_pct_num'] = 100 * df['evidence_length'] / (df['evidence_length'] + df['evaluated_length'])
-
-    bins   = np.arange(0, 101, 10)
-    labels = [f'{i}-{i+10}%' for i in range(0, 91, 10)]
-    df['evidence_range'] = pd.cut(df['evidence_pct_num'], bins=bins, labels=labels, include_lowest=True)
-
-    df_weighted = df.groupby(['dataset', 'evidence_range'], observed=True)['log_accuracy'].mean().reset_index()
-
-    plt.figure(figsize=(12, 7))
-    sns.set_theme(style="white")
-    plt.grid(axis='y', linestyle='--', alpha=0.3)
-
-    sns.lineplot(
-        data=df_weighted, x='evidence_range', y='log_accuracy',
-        marker='o', markersize=10, linewidth=3,
-        color='#e67e22', errorbar=('ci', 95)
-    )
-
-    plt.title('Balanced Trend: Accuracy vs Evidence (Normalized by Dataset)', fontsize=16, fontweight='bold', pad=20)
-    plt.ylabel('Mean of Dataset Accuracies', fontsize=12)
-    plt.xlabel('Evidence Intervals', fontsize=12)
-    plt.ylim(0, 1.1)
-    sns.despine()
-    plt.show()
-
-
-def plot_accuracy_by_confidence_per_dataset(df, datasets_per_img=5):
-    rows = []
-
-    for _, row in df.iterrows():
-        preds     = row['llm_predictions']
-        target    = row['map_assignment']
-        conf_dict = row['confidence']
-        dataset   = row['dataset']
-
-        for var, pred_val in preds.items():
-            if var in target and var in conf_dict:
-                conf_level = conf_dict[var][1].capitalize()
-                hit        = 1 if pred_val == target[var] else 0
-                rows.append({'dataset': dataset, 'confidence': conf_level, 'hit': hit})
-
-    analysis_df = pd.DataFrame(rows)
-    datasets    = analysis_df['dataset'].unique()
-    conf_order  = ['Low', 'Medium', 'High']
-    num_chunks  = (len(datasets) + datasets_per_img - 1) // datasets_per_img
-
-    for i in range(num_chunks):
-        chunk_datasets = datasets[i * datasets_per_img:(i + 1) * datasets_per_img]
-        subset         = analysis_df[analysis_df['dataset'].isin(chunk_datasets)].copy()
-        subset['confidence'] = pd.Categorical(subset['confidence'], categories=conf_order, ordered=True)
-
-        plt.figure(figsize=(16, 8))
-        sns.set_theme(style="white")
-        plt.grid(axis='y', linestyle='--', alpha=0.3)
-
-        ax = sns.barplot(
-            data=subset, x='dataset', y='hit',
-            hue='confidence', hue_order=conf_order,
-            palette='Blues', edgecolor='0.3', errorbar=None
+    for color, pipeline in zip(palette, pipelines):
+        sub = grouped[grouped["pipeline"] == pipeline]
+        agg = (
+            sub.groupby("evidence_ratio")["accuracy_pct"]
+            .mean()
+            .reset_index()
+            .sort_values("evidence_ratio")
         )
+        ax.plot(agg["evidence_ratio"], agg["accuracy_pct"],
+                marker="o", label=pipeline, color=color, linewidth=2)
 
-        for container in ax.containers:
-            ax.bar_label(container,
-                         labels=[f'{b.get_height():.2f}' for b in container],
-                         padding=3, fontsize=10, fontweight='bold')
-
-        plt.title(f'Model Calibration: Accuracy vs. Confidence Level - Batch {i+1}',
-                  fontsize=18, fontweight='bold', pad=25)
-        plt.ylabel('Accuracy Rate', fontsize=13)
-        plt.xlabel('', fontsize=13)
-        plt.ylim(0, 1.15)
-        plt.legend(title='LLM Confidence', title_fontsize='12', bbox_to_anchor=(1.02, 1), loc='upper left')
-        sns.despine()
-        plt.tight_layout()
-        plt.show()
-
-
-def plot_global_accuracy_by_confidence(df):
-    rows = []
-
-    for _, row in df.iterrows():
-        preds     = row['llm_predictions']
-        target    = row['map_assignment']
-        conf_dict = row['confidence']
-        ds_name   = row['dataset']
-
-        for var, pred_val in preds.items():
-            if var in target and var in conf_dict:
-                conf_level = conf_dict[var][1].capitalize()
-                hit        = 1 if pred_val == target[var] else 0
-                rows.append({'dataset': ds_name, 'confidence': conf_level, 'hit': hit})
-
-    analysis_df  = pd.DataFrame(rows)
-    conf_order   = ['Low', 'Medium', 'High']
-    df_balanced  = analysis_df.groupby(['dataset', 'confidence'], observed=True)['hit'].mean().reset_index()
-
-    plt.figure(figsize=(10, 7))
-    sns.set_theme(style="white")
-
-    ax = sns.barplot(
-        data=df_balanced, x='confidence', y='hit',
-        order=conf_order, palette='Blues', edgecolor='black',
-        linewidth=1.5, capsize=.05, errorbar=('ci', 95)
-    )
-
-    for container in ax.containers:
-        ax.bar_label(container, fmt='%.1f%%', padding=10, fontsize=12, fontweight='bold')
-
-    plt.title('Global Model Calibration: Accuracy vs. Reported Confidence', fontsize=16, fontweight='bold', pad=25)
-    plt.ylabel('Balanced Accuracy (Success Rate)', fontsize=13, labelpad=10)
-    plt.xlabel('LLM Confidence Level', fontsize=13, labelpad=10)
-    plt.ylim(0, 1.15)
-    sns.despine()
-    plt.grid(axis='y', linestyle='--', alpha=0.3)
+    ax.set_title("Mean Accuracy by Evidence Ratio, per Pipeline",
+                 fontsize=TITLE_FS, fontweight="bold", pad=10)
+    ax.set_xlabel("Evidence Ratio (%)", fontsize=AXIS_FS)
+    ax.set_ylabel("Mean Accuracy (%)", fontsize=AXIS_FS)
+    ax.set_ylim(0, 115)
+    ax.yaxis.grid(True, linestyle="--", alpha=0.4)
+    ax.set_axisbelow(True)
+    ax.legend(title="Pipeline", fontsize=9, title_fontsize=9)
     plt.tight_layout()
     plt.show()
-
-
-def plot_calibration_curve(df):
-    rows = []
-    for _, row in df.iterrows():
-        preds, target, conf_dict = row['llm_predictions'], row['map_assignment'], row['confidence']
-        conf_map = {'Low': 0.33, 'Medium': 0.66, 'High': 1.0}
-        for var, pred_val in preds.items():
-            if var in target and var in conf_dict:
-                conf_str = conf_dict[var][1].capitalize()
-                hit      = 1 if pred_val == target[var] else 0
-                rows.append({'conf_val': conf_map[conf_str], 'conf_label': conf_str, 'hit': hit})
-
-    calib_df = pd.DataFrame(rows)
-    summary  = calib_df.groupby('conf_label').agg({'hit': 'mean', 'conf_val': 'mean'}).sort_values('conf_val')
-
-    plt.figure(figsize=(8, 8))
-    plt.plot([0, 1], [0, 1], '--', color='gray', label='Calibração Perfeita')
-    plt.plot(summary['conf_val'], summary['hit'], marker='s', markersize=10, linewidth=2, label='GPT-5.4-mini')
-    plt.title('Reliability Diagram (Calibração do Modelo)', fontsize=14)
-    plt.xlabel('Confiança Média Declarada', fontsize=12)
-    plt.ylabel('Acurácia Real (Fração de Acertos)', fontsize=12)
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.show()
-
-
-def plot_variable_difficulty_analysis(df, top_n=10):
-    rows = []
-    for _, row in df.iterrows():
-        preds   = row['llm_predictions']
-        target  = row['map_assignment']
-        dataset = row['dataset']
-        for var, pred_val in preds.items():
-            if var in target:
-                hit = 1 if pred_val == target[var] else 0
-                rows.append({'variable': var, 'hit': hit, 'dataset': dataset})
-
-    var_df  = pd.DataFrame(rows)
-    var_acc = var_df.groupby('variable')['hit'].mean().sort_values()
-
-    worst_vars = var_acc.head(top_n)
-    best_vars  = var_acc.tail(top_n)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 6))
-    sns.set_theme(style="whitegrid")
-
-    sns.barplot(x=worst_vars.values, y=worst_vars.index, ax=ax1, palette="Reds_r")
-    ax1.set_title(f'Top {top_n} Variáveis Mais Difíceis (Menor Acurácia)', fontsize=14)
-    ax1.set_xlabel('Acurácia Média')
-
-    sns.barplot(x=best_vars.values, y=best_vars.index, ax=ax2, palette="Greens_r")
-    ax2.set_title(f'Top {top_n} Variáveis Mais Fáceis (Maior Acurácia)', fontsize=14)
-    ax2.set_xlabel('Acurácia Média')
-
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_error_cascade_per_dataset(df, datasets_per_img=6):
-    results = []
-    for _, row in df.iterrows():
-        preds   = row['llm_predictions']
-        target  = row['map_assignment']
-        dataset = row['dataset']
-        for i, (var, pred_val) in enumerate(preds.items()):
-            if var in target:
-                hit = 1 if pred_val == target[var] else 0
-                results.append({'position': i + 1, 'hit': hit, 'dataset': dataset})
-
-    cascade_df = pd.DataFrame(results)
-    datasets   = cascade_df['dataset'].unique()
-    num_chunks = (len(datasets) + datasets_per_img - 1) // datasets_per_img
-
-    sns.set_theme(style="white")
-
-    for i in range(num_chunks):
-        start          = i * datasets_per_img
-        chunk_datasets = datasets[start:start + datasets_per_img]
-
-        cols      = 2
-        rows      = math.ceil(len(chunk_datasets) / cols)
-        fig, axes = plt.subplots(rows, cols, figsize=(16, 5 * rows),
-                                 gridspec_kw={'hspace': 0.5, 'wspace': 0.15})
-        axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
-
-        for idx, ds_name in enumerate(chunk_datasets):
-            ax     = axes_flat[idx]
-            subset = cascade_df[cascade_df['dataset'] == ds_name]
-
-            sns.lineplot(
-                data=subset, x='position', y='hit',
-                marker='o', markersize=9, linewidth=3, ax=ax,
-                color='#2c3e50', errorbar=('ci', 95)
-            )
-
-            ax.set_title(f'Dataset: {ds_name}', fontsize=14, fontweight='bold', pad=15)
-            ax.set_ylim(-0.05, 1.1)
-            ax.set_yticks([0, 0.5, 1.0])
-            ax.set_xticks(range(1, int(subset['position'].max()) + 1))
-            ax.yaxis.grid(True, linestyle='--', alpha=0.6)
-            sns.despine(ax=ax)
-            ax.set_xlabel('')
-            ax.set_ylabel('')
-
-        for j in range(idx + 1, len(axes_flat)):
-            axes_flat[j].set_visible(False)
-
-        fig.text(0.04, 0.5, 'Mean Success Rate (Hit)', va='center', rotation='vertical', fontsize=15, fontweight='bold')
-        fig.text(0.5, 0.04, 'Variable Order in Prediction Sequence', ha='center', fontsize=15, fontweight='bold')
-        fig.suptitle(f'Sequential Error Cascade Analysis (Batch {i+1})',
-                     fontsize=20, fontweight='bold', y=0.98)
-        plt.subplots_adjust(left=0.08, bottom=0.12, right=0.95, top=0.90)
-        plt.show()
-
-
-def plot_error_cascade_analysis(df):
-    results = []
-    for _, row in df.iterrows():
-        preds   = row['llm_predictions']
-        target  = row['map_assignment']
-        dataset = row['dataset']
-        for i, (var, pred_val) in enumerate(preds.items()):
-            if var in target:
-                hit = 1 if pred_val == target[var] else 0
-                results.append({'position': i + 1, 'hit': hit, 'dataset': dataset})
-
-    cascade_df       = pd.DataFrame(results)
-    balanced_cascade = cascade_df.groupby(['dataset', 'position'], observed=True)['hit'].mean().reset_index()
-
-    plt.figure(figsize=(12, 7))
-    sns.set_theme(style="white")
-
-    ax = sns.lineplot(
-        data=balanced_cascade, x='position', y='hit',
-        marker='o', markersize=10, linewidth=4,
-        color='#c0392b', errorbar=('ci', 95), err_style='band'
-    )
-
-    plt.title('Sequential Error Cascade: Global Performance Trend', fontsize=18, fontweight='bold', pad=25)
-    plt.xlabel('Variable Position in Inference Sequence', fontsize=13, labelpad=15)
-    plt.ylabel('Balanced Success Rate (Macro-Avg)', fontsize=13, labelpad=15)
-    plt.xticks(range(1, int(balanced_cascade['position'].max()) + 1))
-    plt.ylim(0, 1.1)
-    plt.grid(axis='y', linestyle='--', alpha=0.4, zorder=0)
-    sns.despine(trim=True)
-    plt.axhline(0.5, color='black', linestyle=':', alpha=0.3, label='Random Baseline')
-    plt.annotate('Shaded area: 95% CI across datasets', xy=(0.02, 0.05), xycoords='axes fraction', fontsize=10, alpha=0.7)
-    plt.tight_layout()
-    plt.show()
-
 
 # ─────────────────────────────────────────────
 #  TABLES
@@ -853,12 +560,13 @@ def print_evidence_accuracy_table(
     print()
     print("=" * W)
 
-
-def print_paper_table(
+def print_pipeline_accuracy_table(
     df: pd.DataFrame,
     evidence_length: int = 1,
     agent_weights: Optional[list[float]] = None,
 ):
+    df = df.copy()
+    df["_pipeline"] = _pipeline_column(df)
     df_filtered = df[df["evidence_length"] == evidence_length].copy()
 
     if df_filtered.empty:
@@ -869,159 +577,65 @@ def print_paper_table(
         lambda ev: ", ".join(f"{k}={v}" for k, v in sorted(ev.items()))
     )
 
-    datasets = sorted(df_filtered["dataset"].unique())
-    W        = 88
-
+    pipelines = sorted(df_filtered["_pipeline"].unique())
+    W = 100
     print("=" * W)
-    print(f"  Evidence Length = {evidence_length}")
-    print("=" * W)
-    print(f"  {'Dataset / Evidence':<32} {'Acc':>7} {'F1-W':>7} {'F1-M':>7} {'Consensus':>10}")
+    print(f"{'ACURÁCIA POR PIPELINE  (evidence_length = ' + str(evidence_length) + ')':^{W}}")
     print("=" * W)
 
-    for ds in datasets:
-        ds_data        = df_filtered[df_filtered["dataset"] == ds]
-        evidence_groups = sorted(ds_data["evidence_key"].unique())
+    for pipeline in pipelines:
+        p_data = df_filtered[df_filtered["_pipeline"] == pipeline]
+        evidence_groups = sorted(p_data["evidence_key"].unique())
+
+        print(f"\n┌─ Pipeline: {pipeline}")
+        print(f"│  {'Evidência':<28} {'Acertos':>8} {'Acc':>7} {'F1 Mac':>8} {'F1 Wgt':>8} {'Kappa':>8} {'Consenso':>9}")
+        print(f"│  " + "─" * 82)
 
         all_metrics = []
         for ev_key in evidence_groups:
-            rows = ds_data[ds_data["evidence_key"] == ev_key].to_dict("records")
-            m    = calc_group_metrics(rows, agent_weights=agent_weights)
+            rows = p_data[p_data["evidence_key"] == ev_key].to_dict("records")
+            m = calc_group_metrics(rows, agent_weights=agent_weights)
             if not m:
                 continue
             all_metrics.append(m)
-
-        if not all_metrics:
-            continue
-
-        mean = lambda key: sum(m[key] for m in all_metrics) / len(all_metrics)
-
-        print(
-            f"  {ds:<32} "
-            f"{mean('accuracy')*100:>6.1f}%  "
-            f"{mean('f1_weighted'):>6.3f}  "
-            f"{mean('f1_macro'):>6.3f}  "
-            f"{mean('consensus')*100:>8.1f}%"
-        )
-
-        for ev_key, m in zip(evidence_groups, all_metrics):
+            kappa_str = f"{m['kappa']:>8.3f}" if m["kappa"] is not None else "     N/A"
             print(
-                f"    ↳ {ev_key:<30} "
+                f"│  {ev_key:<28} "
+                f"{m['hits']:>3}/{m['total_nodes']:<3}  "
                 f"{m['accuracy']*100:>6.1f}%  "
-                f"{m['f1_weighted']:>6.3f}  "
-                f"{m['f1_macro']:>6.3f}  "
-                f"{m['consensus']*100:>8.1f}%"
+                f"{m['f1_macro']:>7.3f}  "
+                f"{m['f1_weighted']:>7.3f}  "
+                f"{kappa_str}  "
+                f"{m['consensus']*100:>7.1f}%"
             )
 
-        print("-" * W)
+        if all_metrics:
+            print(f"│  " + "─" * 82)
+            mean = lambda key: sum(m[key] for m in all_metrics) / len(all_metrics)
+            valid_kappas = [m["kappa"] for m in all_metrics if m["kappa"] is not None]
+            mean_kappa = sum(valid_kappas) / len(valid_kappas) if valid_kappas else None
+            kappa_str = f"{mean_kappa:>8.3f}" if mean_kappa is not None else "     N/A"
+            total_hits = sum(m["hits"] for m in all_metrics)
+            total_nodes = sum(m["total_nodes"] for m in all_metrics)
 
-    print("=" * W)
+            print(
+                f"│  {'[MÉDIA DO PIPELINE]':<28} "
+                f"{total_hits:>3}/{total_nodes:<3}  "
+                f"{mean('accuracy')*100:>6.1f}%  "
+                f"{mean('f1_macro'):>7.3f}  "
+                f"{mean('f1_weighted'):>7.3f}  "
+                f"{kappa_str}  "
+                f"{mean('consensus')*100:>7.1f}%"
+            )
+
+        print(f"└" + "─" * 84)
+
     print()
-
-
-def print_all_paper_tables(df: pd.DataFrame, agent_weights: Optional[list[float]] = None):
-    for length in sorted(df["evidence_length"].unique()):
-        print_paper_table(df, evidence_length=length, agent_weights=agent_weights)
-
+    print("=" * W)
 
 # ─────────────────────────────────────────────
 #  ENSEMBLE
 # ─────────────────────────────────────────────
-
-def compute_expert_ensemble_accuracy(
-    df: pd.DataFrame,
-    agent_weights: Optional[list[float]] = None,
-) -> pd.DataFrame:
-    """
-    Para cada (dataset, evidence, prompt_type):
-      - Calcula a moda (ou votação ponderada) das predições entre os trials
-      - Compara com o map_assignment para obter acurácia do especialista
-
-    Depois, para cada (dataset, evidence):
-      - Faz a média das acurácias entre os especialistas (prompt_types)
-    """
-    df = df.copy()
-    df["evidence_key"] = df["evidence"].apply(frozen_evidence)
-
-    records = []
-    for (dataset, evidence_key, prompt_type), group in df.groupby(
-        ["dataset", "evidence_key", "prompt_type"]
-    ):
-        rows = group.to_dict("records")
-        acc  = calc_group_accuracy(rows, agent_weights=agent_weights)
-        records.append({
-            "dataset":      dataset,
-            "evidence_key": evidence_key,
-            "prompt_type":  prompt_type,
-            "accuracy":     acc,
-            "n_trials":     len(rows),
-        })
-
-    per_expert = pd.DataFrame(records)
-
-    ensemble = (
-        per_expert
-        .groupby(["dataset", "evidence_key"])
-        .agg(
-            accuracy=("accuracy", "mean"),
-            n_experts=("prompt_type", "nunique"),
-            n_trials=("n_trials", "sum"),
-        )
-        .reset_index()
-    )
-
-    dataset_summary = (
-        ensemble
-        .groupby("dataset")
-        .agg(
-            accuracy=("accuracy", "mean"),
-            n_evidence_groups=("evidence_key", "nunique"),
-        )
-        .reset_index()
-        .sort_values("accuracy", ascending=False)
-    )
-
-    return dataset_summary, ensemble, per_expert
-
-
-def plot_expert_ensemble_accuracy(
-    df: pd.DataFrame,
-    agent_weights: Optional[list[float]] = None,
-):
-    dataset_summary, ensemble, _ = compute_expert_ensemble_accuracy(df, agent_weights=agent_weights)
-
-    order = dataset_summary.sort_values("accuracy", ascending=False)["dataset"].tolist()
-    ensemble["accuracy_pct"]       = ensemble["accuracy"] * 100
-    dataset_summary["accuracy_pct"] = dataset_summary["accuracy"] * 100
-
-    n_evidence = ensemble["evidence_key"].nunique() // len(order)
-
-    weight_label = f" | weights={agent_weights}" if agent_weights else ""
-    fig, ax      = plt.subplots(figsize=(max(8, len(order) * 1.5), 5))
-
-    sns.barplot(
-        data=dataset_summary, x="dataset", y="accuracy_pct",
-        order=order, palette="Blues_d", edgecolor="black", linewidth=0.6, ax=ax,
-    )
-
-    sns.stripplot(
-        data=ensemble, x="dataset", y="accuracy_pct",
-        order=order, color="black", size=6, jitter=True, alpha=0.7, ax=ax,
-    )
-
-    for container in ax.containers:
-        ax.bar_label(container, fmt="%.1f%%", padding=3, fontsize=9)
-
-    ax.set_title(
-        f"Expert Ensemble Accuracy by Dataset ({n_evidence} experiments per dataset){weight_label}",
-        fontsize=13, fontweight="bold"
-    )
-    ax.set_xlabel("Dataset")
-    ax.set_ylabel("Accuracy (%)")
-    ax.set_ylim(0, 115)
-    plt.xticks(rotation=15, ha="right")
-    plt.tight_layout()
-    plt.show()
-
 
 import warnings 
 
@@ -1203,19 +817,7 @@ AGENT_WEIGHTS = None
 
 # print_prompt_table(df)
 # plot_prompt_by_dataset(df)
+print_pipeline_accuracy_table(df, agent_weights=AGENT_WEIGHTS)
+
 plot_grouped_accuracy(df, datasets_per_img=9, agent_weights=AGENT_WEIGHTS)
-# plot_dataset_accuracy(df, datasets_per_img=8)
-# plot_global_average_accuracy(df)
-
-# plot_accuracy_by_evidence_per_dataset(df, datasets_per_img=5)
-
-# plot_expert_ensemble_accuracy(df, agent_weights=AGENT_WEIGHTS)
-# print_paper_table(df, agent_weights=AGENT_WEIGHTS)
-# print_evidence_accuracy_table(df, agent_weights=AGENT_WEIGHTS)
-# plot_global_accuracy_by_evidence(df)
-# plot_accuracy_by_confidence_per_dataset(df, datasets_per_img=5)
-# plot_global_accuracy_by_confidence(df)
-# plot_calibration_curve(df)
-# plot_variable_difficulty_analysis(df, top_n=10)
-# plot_error_cascade_per_dataset(df, datasets_per_img=5)
-# plot_error_cascade_analysis(df)
+plot_pipeline_accuracy(df, agent_weights=AGENT_WEIGHTS)

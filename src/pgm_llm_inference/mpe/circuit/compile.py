@@ -22,7 +22,8 @@ from ..metadata_generation import (
     generate_relationship_notes_with_llm,
     load_relationship_notes,
 )
-from ..types import PromptTrace
+from ..prompt_builders import build_network_briefing_prompt
+from ..types import BriefingResponse, PromptTrace
 from ...core.config import InferenceConfig
 from .elicit import elicit_semantic_factor
 from .order import build_bucket_structure
@@ -73,9 +74,29 @@ def compile_semantic_circuit(
 
     order, separators, bucket_target = build_bucket_structure(bn)
 
+    if verbose:
+        print(f"\n[COMPILE] Ordem de eliminação (min-degree): {len(order)} variáveis")
+        print("  fatores locais evidence-free → reutilizáveis para qualquer query")
+
     client = LLMJsonClient(config, use_real_llm=use_real_llm)
+
+    if verbose:
+        print("\n[COMPILE] Gerando network briefing via LLM...")
+
+    briefing_prompt = build_network_briefing_prompt(bn, metadata, {}, relationship_notes)
+    briefing, briefing_trace = client.complete_json(
+        purpose="network_briefing",
+        variable=None,
+        prompt=briefing_prompt,
+        response_model=BriefingResponse,
+    )
+
+    if verbose:
+        print("  ✓ Briefing concluído")
+        print(f"\n[COMPILE] Elicitação de fatores locais — {len(order)} variáveis")
+
     factors = {}
-    traces: list[PromptTrace] = []
+    traces: list[PromptTrace] = [briefing_trace]
 
     for index, variable in enumerate(order, start=1):
         if verbose:
@@ -87,6 +108,7 @@ def compile_semantic_circuit(
             relationship_notes=relationship_notes,
             alias_map=alias_map,
             client=client,
+            briefing=briefing,
             max_rows_per_call=max_rows_per_call,
             max_context_rows=max_context_rows,
         )
@@ -101,6 +123,7 @@ def compile_semantic_circuit(
         bn=bn,
         alias_map=alias_map,
         metadata=metadata,
+        briefing=briefing,
         traces=traces,
     )
 

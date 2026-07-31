@@ -24,7 +24,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..types import PromptTrace, VariableMetadata
+from ..types import BriefingResponse, PromptTrace, VariableMetadata
 
 
 # ---------------------------------------------------------------------------
@@ -115,4 +115,5 @@ class SemanticCircuit:
     bn: Any                                         # BayesianNetwork (modo MPE, parse_bif)
     alias_map: dict[str, str]
     metadata: dict[str, VariableMetadata]
+    briefing: BriefingResponse | None = None        # gerado 1x, evidence={}, injetado em cada fator
     traces: list[PromptTrace] = field(default_factory=list)

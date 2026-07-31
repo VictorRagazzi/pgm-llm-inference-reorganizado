@@ -17,6 +17,11 @@ evaluate_forward_only:
     fator dado os pais já resolvidos, na ordem topológica normal. É o
     que o Part 1 faz. Serve como âncora de comparação (E2.1), não como
     método recomendado: não corrige diagnosticamente evidência a jusante.
+
+Desempate (empates no score total, que surgem da escala ordinal
+grosseira de ranking_to_scores — ver scale.py): _resolve_best aplica uma
+regra determinística de 3 níveis, reprodutível independente de ordem de
+iteração do Python — ver docstring de _resolve_best.
 """
 
 from __future__ import annotations
@@ -34,6 +39,49 @@ def _domain_for(variable: str, bn, evidence: dict[str, str]) -> tuple[str, ...]:
     if variable in evidence:
         return (evidence[variable],)
     return tuple(bn.variables[variable].states)
+
+
+def _resolve_best(
+    candidates: list[tuple[float, float, str]],
+    domain_order: dict[str, int],
+) -> tuple[str, float, int]:
+    """
+    candidates: lista de (total_score, own_local_score, value) — total_score
+    é o que a passada ascendente maximiza (fator local + mensagens dos
+    filhos); own_local_score é a contribuição isolada do fator local,
+    mantida no retorno só pra diagnóstico (ver diagnose.py), NÃO usada
+    como critério de desempate (ver nota abaixo).
+
+    Desempate determinístico e reprodutível, independente da ordem de
+    iteração do Python:
+      1. Maior total_score (o critério principal, sempre).
+      2. Empate: ordem canônica do domínio da variável (a ordem
+         declarada no .bif) — arbitrária, mas fixa e reproduzível.
+
+    Por que NÃO desempatar por own_local_score (tentativa descartada):
+    testado empiricamente no caso Burglary/Earthquake -> Alarm, prefer
+    o maior own_local_score sistematicamente puxa de volta pro prior
+    local — exatamente o viés que causa a falha de explaining away que
+    o two-pass existe pra corrigir. Num empate por coincidência
+    aritmética (score baixo do Alarm inconsistente + score alto do
+    prior cancelando exatamente o score alto do Alarm consistente +
+    score baixo do prior "raro"), esse critério reverte para a mesma
+    resposta do forward-only, anulando a correção. Fica só a ordem do
+    domínio: não finge ser mais "inteligente" do que realmente é --
+    um empate aqui é sintoma da escala ordinal grosseira (ranking_to_scores),
+    não algo que dê pra resolver com mais lógica em cima do mesmo score.
+
+    Retorna (valor_escolhido, total_score, nº de candidatos que ainda
+    empatavam no total_score — >1 significa empate genuíno, resolvido só
+    pela ordem do domínio).
+    """
+    best_total = max(c[0] for c in candidates)
+    tied = [c for c in candidates if c[0] == best_total]
+    if len(tied) == 1:
+        return tied[0][2], best_total, 1
+
+    tied.sort(key=lambda c: domain_order[c[2]])
+    return tied[0][2], best_total, len(tied)
 
 
 def evaluate_two_pass(
@@ -80,6 +128,7 @@ def evaluate_two_pass(
 
         own_domain = _domain_for(variable, bn, norm_evidence)
         own_incoming = incoming.get(variable, [])
+        domain_order = {state: i for i, state in enumerate(bn.variables[variable].states)}
 
         table: dict[tuple[str, ...], float] = {}
         chosen: dict[tuple[str, ...], str] = {}
@@ -87,21 +136,21 @@ def evaluate_two_pass(
         for combo in itertools.product(*domains):
             sep_assignment = dict(zip(separator, combo, strict=True))
 
-            best_score = NEG_INF
-            best_value = None
+            candidates: list[tuple[float, float, str]] = []
             for value in own_domain:
                 full = dict(sep_assignment)
                 full[variable] = value
                 parent_context = {p: full[p] for p in factor.parents}
-                score = factor.score(parent_context, value)
+                own_score = factor.score(parent_context, value)
 
+                total_score = own_score
                 for child_sep, child_table in own_incoming:
                     child_key = context_key(full, child_sep)
-                    score += child_table[child_key]
+                    total_score += child_table[child_key]
 
-                if score > best_score:
-                    best_score, best_value = score, value
+                candidates.append((total_score, own_score, value))
 
+            best_value, best_score, _n_tied = _resolve_best(candidates, domain_order)
             table[combo] = best_score
             chosen[combo] = best_value
 
@@ -135,6 +184,11 @@ def evaluate_forward_only(
     seu próprio fator local dado os pais já resolvidos — mesma lógica do
     Part 1 (reconstruct_assignment). Serve de âncora de comparação
     (E2.1): mostra que Part 2 generaliza Part 1, não que o substitui.
+
+    Não há soma de fatores independentes aqui (só um fator por decisão),
+    então não há o problema de empate por escala grosseira que existe em
+    evaluate_two_pass — o ranking do próprio fator já é uma permutação
+    sem empates por definição (ranking_to_scores nunca repete valor).
     """
     bn = circuit.bn
     norm_evidence = normalize_assignment(evidence, bn, circuit.alias_map)

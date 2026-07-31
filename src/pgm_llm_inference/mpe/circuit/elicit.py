@@ -18,7 +18,7 @@ from ..client import LLMJsonClient
 from ..io import resolve_variable
 from ...models import BayesianNetwork
 from ..prompt_builders import generate_context_rows
-from ..types import PromptTrace, VariableMetadata
+from ..types import BriefingResponse, PromptTrace, VariableMetadata
 from .prompts import build_factor_prompt
 from .scale import ranking_to_scores
 from .types import FactorElicitationResponse, ScoredRow, SemanticFactor, context_key
@@ -66,13 +66,16 @@ def elicit_semantic_factor(
     relationship_notes: dict[str, tuple[str, ...]],
     alias_map: dict[str, str],
     client: LLMJsonClient,
+    briefing: BriefingResponse | None = None,
     max_rows_per_call: int = 64,
     max_context_rows: int = 4096,
 ) -> tuple[SemanticFactor, list[PromptTrace]]:
     """
     Elicita o fator local de `variable`: ranking completo de seus estados
     para cada configuração de seus PRÓPRIOS pais. evidence={} sempre — o
-    resultado não depende de nenhuma query específica.
+    resultado não depende de nenhuma query específica. `briefing` (gerado
+    1x por rede, também com evidence={}) dá contexto global compartilhado
+    entre todas as variáveis, igual ao Part 1 injeta em cada bucket.
     """
     parents = tuple(bn.parents[variable])
     domain = tuple(bn.variables[variable].states)
@@ -86,7 +89,9 @@ def elicit_semantic_factor(
 
     for start in range(0, len(all_context_rows), max_rows_per_call):
         chunk = all_context_rows[start : start + max_rows_per_call]
-        prompt = build_factor_prompt(variable, bn, metadata, relationship_notes, chunk)
+        prompt = build_factor_prompt(
+            variable, bn, metadata, relationship_notes, chunk, briefing
+        )
 
         response, trace = client.complete_json(
             purpose="local_factor_ranking",
