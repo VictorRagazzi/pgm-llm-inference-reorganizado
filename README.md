@@ -16,13 +16,17 @@ intercambiáveis (Strategy Pattern):
 
 Em cima desse núcleo existe uma camada de **experimentos** (`experiment/`)
 que monta datasets reais (`.bif`, `.xdsl`, `.dne`), gera metadados/contexto
-via LLM quando necessário, roda os três métodos lado a lado e compara os
-resultados.
+via LLM quando necessário, roda os métodos lado a lado e compara os resultados.
+
+O pipeline principal de produção da abordagem LLM-MPE vive em `mpe/`: ele
+**compila** as mensagens semânticas uma única vez por dataset (custo: N
+chamadas LLM) e **reutiliza** essa compilação para inferir múltiplas
+evidências (~2 chamadas LLM por evidência).
 
 ## Instalação
 
 ```bash
-uv sync                 # dependências de runtime
+uv sync                  # dependências de runtime
 uv sync --extra dev      # + pytest, ruff
 ```
 
@@ -38,7 +42,7 @@ from pgm_llm_inference import (
     SumProductStrategy, InferenceEngine,
 )
 
-rain = Variable(name="Rain", domain=["yes", "no"])
+rain  = Variable(name="Rain",     domain=["yes", "no"])
 grass = Variable(name="GrassWet", domain=["yes", "no"])
 
 network = BayesianNetwork()
@@ -75,21 +79,35 @@ para deixar a escolha configurável.
 ```
 src/pgm_llm_inference/
 ├── models/             Variable, Factor, BayesianNetwork (Pydantic)
-├── core/               config, ordenação de eliminação, operações de fatores
-├── inference/          motor de Variable Elimination (engine, ve_algorithm)
-├── strategies/         Sum-Product, Max-Product e LLM (base.py define a interface)
+├── core/               config, ordenação de eliminação, operações de fatores,
+│                       conversão de formatos (pgmpy, DNE)
+├── inference/          motor de Variable Elimination (engine, ve_algorithm,
+│                       postprocessing)
+├── strategies/         Sum-Product, Max-Product e LLM Semantic
 │   └── llm/
-│       ├── llm_mpe_sachs.py   tipos + pipeline LLM-MPE (parse de .bif, prompts,
-│       │                      bucket elimination semântica, reconstrução, audit)
 │       ├── semantic.py        LLMSemanticStrategy (MAP por variável)
 │       ├── openai.py          cliente LLM via API OpenAI
 │       ├── local.py           cliente LLM via servidor local (streaming)
 │       └── prompts.py         templates de prompt (simple / few-shot / CoT)
+├── mpe/                pipeline LLM-MPE de produção
+│   ├── compile.py             compilação semântica (1× por dataset)
+│   ├── infer.py               inferência sobre evidências usando a compilação
+│   ├── client.py              cliente HTTP para o LLM (httpx, structured output)
+│   ├── prompt_builders.py     prompts de compilação e inferência
+│   ├── graph.py               utilidades de grafo da rede
+│   ├── bucket.py              bucket elimination semântica
+│   ├── state_semantics.py     semântica dos estados das variáveis
+│   ├── reconstruction.py      reconstrução da solução MPE completa
+│   ├── types.py               tipos de dados do pipeline MPE
+│   └── io.py                  leitura e gravação de compilações em disco
 ├── experiment/         orquestração de experimentos
-│   ├── compiled_inference.py   compile (1x por dataset) + infer (por evidência)
-│   ├── experiment.py            run_single_map_experiment / run_single_mpe_experiment
-│   ├── metadata_generation.py   geração de metadados e relationship-notes via LLM
-│   ├── runners.py / batch.py / sampling.py / llm_factory.py / metadata.py
+│   ├── compiled_inference.py  compile (1× por dataset) + infer (por evidência)
+│   ├── experiment.py          run_single_map_experiment / run_single_mpe_experiment
+│   ├── runners.py             runner de experimento individual
+│   ├── batch.py               runner de múltiplos datasets/evidências
+│   ├── sampling.py            amostragem de evidências e query vars
+│   ├── llm_factory.py         build_llm_fn (OpenAI / local)
+│   └── metadata.py            carregamento de metadados e relationship-notes
 ├── io/                 carregamento de redes (.bif/.bif.gz/.xdsl/.dne)
 ├── evaluation/         métricas (acerto LLM vs. MPE exato)
 ├── logging/            registro de resultados em JSONL/CSV
@@ -99,16 +117,15 @@ src/pgm_llm_inference/
     │   ├── main.py             batch completo: múltiplos datasets e evidências
     │   └── main_single_run.py  exemplo mínimo: 1 dataset, 1 evidência
     ├── analysis/       scripts para ANALISAR resultados já gerados
-    │   ├── metrics_3.py        gráficos e métricas (rodar manualmente após os experimentos)
+    │   ├── metrics_3.py        gráficos e métricas (rodar após os experimentos)
     │   ├── reinference.py      segunda passada de verificação via Markov Blanket
-    │   └── get_table.py        estatísticas estruturais dos datasets (Markov Blanket médio, etc.)
+    │   └── get_table.py        estatísticas estruturais dos datasets
     └── data_prep/      utilitários de preparação de dataset
         └── change_nodes_name.py
 ```
 
-Pastas vazias por padrão (geradas/baixadas em tempo de execução, fora do
-controle de versão — ver `.gitignore`): `datasets/`, `metadata/`,
-`relationships/`, `logs/`.
+Pastas geradas em tempo de execução (fora do controle de versão — ver
+`.gitignore`): `datasets/`, `metadata/`, `relationships/`, `logs/`, `tables/`.
 
 ## Rodando experimentos
 
@@ -130,7 +147,7 @@ uv run python -m pgm_llm_inference.scripts.analysis.get_table
 Todas as opções de runtime vêm de `InferenceConfig` (`core/config.py`),
 populada a partir de variáveis de ambiente com prefixo `PGM_` (ver
 `.env.example`): nível de log, epsilon numérico, heurística de ordenação
-de eliminação, timeout/retries do LLM, e credenciais da API OpenAI.
+de eliminação, timeout/retries do LLM e credenciais da API OpenAI.
 
 ## Desenvolvimento
 
@@ -152,7 +169,10 @@ A biblioteca usa Strategy Pattern para alternar entre métodos de inferência:
   (`strategies/base.py`); plugável no `InferenceEngine` sem alterar o motor.
 - **inference/engine.py** — orquestra o algoritmo de Variable Elimination
   usando a estratégia injetada.
-- **experiment/compiled_inference.py** — pipeline de produção da abordagem
-  LLM-MPE: compila as mensagens semânticas uma vez por dataset (custo: N
-  chamadas LLM) e reutiliza essa compilação para inferir múltiplas
-  evidências (custo: ~2 chamadas LLM por evidência).
+- **mpe/** — pipeline LLM-MPE de produção com dois estágios separados:
+  - `compile.py` — lê a rede e gera mensagens semânticas via LLM (roda uma
+    vez por dataset, resultado salvo em `tables/*.compiled.pkl`).
+  - `infer.py` — dado um conjunto de evidências e a compilação em cache,
+    resolve o MPE com ~2 chamadas LLM.
+- **experiment/compiled_inference.py** — cola os dois estágios acima e
+  expõe a interface de alto nível usada pelos scripts de experimento.

@@ -1,6 +1,6 @@
 from typing import Callable, TypeVar, Type
 from pgm_llm_inference.core.config import InferenceConfig
-from pgm_llm_inference.utils import _extract_last_json_object, _extract_text_from_message
+from pgm_llm_inference.utils import _extract_last_json_object
 import time
 from pydantic import BaseModel
 
@@ -90,22 +90,3 @@ def create_openai_llm_function(config: InferenceConfig) -> Callable[[str], str]:
             raise RuntimeError(f"LLM query failed: {e}") from e
 
     return query_llm
-
-def pydantic_to_openai_json_schema(schema: Type[BaseModel]) -> dict:
-    json_schema = schema.model_json_schema()
-
-    properties = json_schema.get("properties", {})
-    required = list(properties.keys())
-
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": schema.__name__,
-            "schema": {
-                "type": "object",
-                "properties": properties,
-                "required": required,
-                "additionalProperties": False,
-            },
-        },
-    }

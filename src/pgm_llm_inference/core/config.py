@@ -6,20 +6,14 @@ class InferenceConfig(BaseSettings):
     # Logging
     verbose: bool = False
     log_level: str = "INFO"
-    log_file_name: str = "logs/no_expert_notes.jsonl"
-    # log_file_name: str = "logs/gpt_5_4_mini.jsonl"
+    log_file_name: str = "logs/local_test.jsonl"
 
     # Numerical stability
     epsilon: float = 1e-10
-    use_log_space: bool = False
 
     # Elimination ordering
     default_ordering_heuristic: str = "min_degree" # "min_degree" or "max_degree" or "topological" or "reverse_topological" or "central" or "random"
-    
-    # context_generator_prompt: str = "semantic_enrichment"  # "context_generation"
-    enable_llm_critique: bool = False
-    confidence_values: list[str] = ["low"]
-    
+        
     show_input_data: bool = True
     show_llm_prompt: bool = False
     show_llm_output: bool = False
@@ -31,24 +25,23 @@ class InferenceConfig(BaseSettings):
     # OpenAI API settings (also works with compatible proxies)
     openai_api_key: str | None = None
     openai_base_url: str | None = "https://openrouter.ai/api/v1"
-    # openai_model: str = "anthropic/claaaauuuuudeeee-sooooonneeeeet-4.6"
     openai_model: str = "deepseek/deepseek-v4-flash"
-    # openai_model: str = "gpt-5.4-mini"
+    # openai_model: str = "anthropic/claaaauuuuudeeee-sooooonneeeeet-4.6"
+    # openai_model: str = "~deepseek/deepseek-v4-flash-latest"
+    # openai_model: str = "qwen3-coder:30b"
     openai_temperature: float = 0.0
-    openai_max_retries: int = 2
     openai_use_json_response_format: bool = True
-
 
     # local_url: str ="http://localhost:11434/v1/chat/completions"
     # local_model: str = "qwen3:32b-ctx"
 
-    local_url: str ="http://localhost:1234/v1/chat/completions"
-    local_model: str ="deepseek/deepseek-r1-0528-qwen3-8b"
+    local_url: str ="http://localhost:11434/v1/chat/completions"
+    local_model: str ="qwen3-coder:30b"
+    # local_model: str ="deepseek/deepseek-r1-0528-qwen3-8b"
     # local_model: str ="meta-llama-3.1-8b-instruct"
     # local_model: str ="qwen2.5-7b-instruct-1m"
     
     mode: str = "mpe"
-    inject_decisions_as_evidence: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="PGM_",

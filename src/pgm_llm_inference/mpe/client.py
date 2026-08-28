@@ -121,7 +121,7 @@ class LLMJsonClient:
         trace = PromptTrace(purpose=purpose, variable=variable, prompt=prompt)
         retry_instruction = ""
  
-        for attempt_number in range(1, self.config.openai_max_retries + 2):
+        for attempt_number in range(1, self.config.llm_max_retries + 2):
             request_prompt = prompt + retry_instruction
  
             if self.config.show_llm_prompt:

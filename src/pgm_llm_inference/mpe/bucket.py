@@ -195,7 +195,6 @@ def semantic_message_from_response(
                     rationale=row.rationale,
                 )
             )
-
         if not contexts_match(
             [row.context for row in normalized_messages],
             bucket.context_rows,

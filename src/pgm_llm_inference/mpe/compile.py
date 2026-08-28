@@ -142,7 +142,7 @@ def compile_semantic_messages(
     metadata_path: Path | None = None,
     relationship_path: Path | None = None,
     llm_fn,
-    max_context_rows: int = 512,
+    max_context_rows: int = 2048,
     use_real_llm: bool = False,
 ) -> CompiledSemanticMessages:
     """
@@ -264,6 +264,11 @@ def compile_semantic_messages(
 
         # active_messages não atualizado — invariante mantida
         messages[variable] = message
+
+        # consumir as mensagens que entraram neste bucket e publicar a nova
+        # consumed_ids = {id(m) for m in bucket.incoming_messages}
+        # active_messages = [m for m in active_messages if id(m) not in consumed_ids]
+        # active_messages.append(message)
 
     if config.show_input_data:
         print(

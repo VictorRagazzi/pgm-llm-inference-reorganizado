@@ -51,11 +51,7 @@ def main():
 
         result = run_single_mpe_experiment(
             network=network,
-            query_vars=query_vars,
             evidence=evidence,
-            prompt_type=prompt_type,
-            prompt_critique="prompt_critique",
-            context=context,
             llm_fn=llm_fn,
             bif_path=dataset_path,
             max_estimated_llm_calls=5,

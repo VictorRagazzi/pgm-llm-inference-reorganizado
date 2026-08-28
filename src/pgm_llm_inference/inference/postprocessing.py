@@ -45,7 +45,4 @@ def postprocess_result(
         result["map_assignment"] = assignment
         result["map_probability"] = float(final_factor.values.max())
 
-    elif hasattr(strategy, "get_predictions"):
-        result["llm_predictions"] = strategy.get_predictions()
-
     return result

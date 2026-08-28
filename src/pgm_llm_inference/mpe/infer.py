@@ -15,14 +15,14 @@ from ..core.config import InferenceConfig
 from .client import LLMJsonClient
 from .compile import CompiledSemanticMessages
 from .io import normalize_assignment
-from .prompt_builders import build_audit_prompt, build_reconstruction_prompt
+# from .prompt_builders import build_audit_prompt, build_reconstruction_prompt
 from .reconstruction import (
-    apply_audit_repair,
     reconstruct_assignment,
-    validate_audit_response,
-    validate_reconstruction_response,
+    # apply_audit_repair,
+    # validate_audit_response,
+    # validate_reconstruction_response,
 )
-from .types import AuditResponse, ReconstructionResponse
+# from .types import AuditResponse, ReconstructionResponse
 
 
 def infer_from_compiled(

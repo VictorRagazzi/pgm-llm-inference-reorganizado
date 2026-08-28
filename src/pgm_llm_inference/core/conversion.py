@@ -1,7 +1,4 @@
-from os import name
 from pgm_llm_inference.models import BayesianNetwork, Variable, Factor
-from pathlib import Path
-from pgmpy.models import DiscreteBayesianNetwork
 
 def convert_pgmpy_model(model) -> BayesianNetwork:
     """

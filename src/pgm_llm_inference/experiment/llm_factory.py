@@ -4,23 +4,6 @@ from pgm_llm_inference.strategies.llm.local import local_llm_structured
 from pydantic import BaseModel
 from typing import Callable, Literal
 
-class SemanticInferenceResult(BaseModel):
-    variable: str | None = None
-    value: str | None = None
-    confidence: Literal["high", "medium", "low"] = ""
-    reasoning: str | None = None
-    internal_reasoning: str | None = None
-    
-class InferenceCritiqueResult(BaseModel):
-    variable: str
-    value: str
-    confidence: Literal["high", "medium", "low"] = "medium"
-    valid: bool
-    reason: str | None
-
-class ContextGenerationResult(BaseModel):
-    context: str | dict[str, str] | None = None
-
 def get_model_name(use_real_llm: bool) -> str:
     config = InferenceConfig()
     if use_real_llm:
@@ -44,9 +27,3 @@ def build_llm_fn(*, use_real_llm: bool, use_local_llm: bool):
         return schema()
 
     return mock_llm
-
-def run_inference(llm_fn, prompt: str) -> SemanticInferenceResult:
-    return llm_fn(prompt, SemanticInferenceResult)
-
-def run_critique(llm_fn, prompt: str) -> InferenceCritiqueResult:
-    return llm_fn(prompt, InferenceCritiqueResult)

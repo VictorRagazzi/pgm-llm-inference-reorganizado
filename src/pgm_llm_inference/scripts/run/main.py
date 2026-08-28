@@ -2,6 +2,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
+from pgm_llm_inference.core.config import InferenceConfig
 import pgm_llm_inference.utils as utils
 from pgm_llm_inference.utils import load_or_compile
 from pgm_llm_inference.io.loaders import load_network
@@ -18,7 +19,7 @@ from pgm_llm_inference.experiment.experiment import run_max_product
 
 MAP = "map"
 MPE = "mpe"
-
+inference_cfg = InferenceConfig()
 
 def _notify_beep(frequency: int, duration_ms: int) -> None:
     """
@@ -170,20 +171,23 @@ def run_experiment(
 
 def main():
     datasets = [
-        "gonorrhoeae.bif",
+        # "gonorrhoeae.bif",
+        # "adhd.bif",
+        # "cryptocurrency.bif",
+        # "crimescene.bif",
+        # "insurance.bif",
+        # "sachs.bif",
+        "arctic_sea.bif",
+
         # "diabets.bif",
         # "aspergillus.bif",
-        # "adhd.bif",
         # "munin1.bif",
         # "hepar2.bif",
 
-        # "cryptocurrency.bif",
-        # "sachs.bif",
         # "coronary.bif",
-        # "crimescene.bif",
         # "coral1.bif",
+        # "bankruptcy.bif",
         # "asia.bif",
-        # "insurance.bif",
     ]
 
     cfg = ExperimentConfig(
@@ -218,9 +222,12 @@ def main():
 
 
         print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
+
+        model_name = inference_cfg.local_model if cfg.use_local_llm else inference_cfg.openai_model
         compiled = load_or_compile(
             dataset_name=name,
             network=network,
+            model_name=model_name,
             bif_path=path,
             metadata_path=BASE_DIR / "metadata" / f"{name.split('.')[0]}.jsonl",
             relationship_path=BASE_DIR / "relationships" / f"{name.split('.')[0]}.jsonl",

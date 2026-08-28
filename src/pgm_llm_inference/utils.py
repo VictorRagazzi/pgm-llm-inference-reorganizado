@@ -23,15 +23,19 @@ llm_request_count = 0
 
 TABLES_DIR = Path(__file__).resolve().parents[1] / "tables"
 
-def _compiled_path(dataset_name: str) -> Path:
+def _compiled_path(dataset_name: str, model_name: str) -> Path:
     stem = Path(dataset_name).stem          # "hepar2.bif" → "hepar2"
+    # Sanitiza o model name para usar como parte do filename
+    # "deepseek/deepseek-v4-flash" → "deepseek__deepseek-v4-flash"
+    safe_model = model_name.replace("/", "__").replace(":", "-")
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
-    return TABLES_DIR / f"{stem}.compiled.pkl"
-
+    # return TABLES_DIR / f"{stem}.compiled.pkl"
+    return TABLES_DIR / f"{stem}.{safe_model}.compiled.pkl"
 
 def load_or_compile(
     dataset_name: str,
     *,
+    model_name: str,          # ← novo
     network,
     bif_path: Path,
     metadata_path: Path,
@@ -43,7 +47,7 @@ def load_or_compile(
     Tenta carregar CompiledSemanticMessages de tables/<stem>.compiled.pkl.
     Se não existir (ou estiver corrompido), compila e salva.
     """
-    path = _compiled_path(dataset_name)
+    path = _compiled_path(dataset_name, model_name)
 
     if path.exists():
         print(f">>> [CACHE] Carregando tabelas compiladas de '{path.name}'...")
@@ -127,60 +131,3 @@ def _extract_last_json_object(raw: str) -> dict:
             return json.loads(clean_candidate)
         except Exception:
             raise ValueError(f"Failed to parse JSON. Error: {str(e)}. Candidate: {candidate}")
-
-
-def _extract_text_from_message(msg) -> str:
-    """
-    Extract textual output from:
-    1) legacy string content
-    2) multimodal content blocks
-    3) GPT-5 reasoning / reasoning_details summaries
-    """
-
-    # 1. Legacy: content é string
-    if isinstance(msg.content, str):
-        text = msg.content.strip()
-        if text:
-            return text
-
-    # 2. Multimodal: content é lista de blocos
-    if isinstance(msg.content, list):
-        parts: list[str] = []
-
-        for block in msg.content:
-            if isinstance(block, dict) and block.get("type") in ("text", "output_text"):
-                parts.append(block.get("text", ""))
-
-        text = "".join(parts).strip()
-        if text:
-            return text
-
-    # 3. GPT-5+: reasoning como string direta
-    reasoning = getattr(msg, "reasoning", None)
-    if isinstance(reasoning, str):
-        text = reasoning.strip()
-        if text:
-            return text
-
-    # 4. GPT-5+: reasoning_details com summaries
-    details = getattr(msg, "reasoning_details", None)
-    if isinstance(details, list):
-        parts: list[str] = []
-
-        for item in details:
-            if (
-                isinstance(item, dict)
-                and item.get("type") == "reasoning.summary"
-                and isinstance(item.get("summary"), str)
-            ):
-                parts.append(item["summary"])
-
-        text = "\n".join(parts).strip()
-        if text:
-            return text
-
-    # Nada aproveitável
-    raise ValueError(
-        "LLM returned no usable textual output. "
-        f"Full message: {msg.model_dump()}"
-    )

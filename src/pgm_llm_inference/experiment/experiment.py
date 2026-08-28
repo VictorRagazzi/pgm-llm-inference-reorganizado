@@ -97,16 +97,11 @@ def run_single_mpe_experiment(
     evidence: dict[str, str],
     llm_fn,
     bif_path: Path,
-    query_vars=None,               # mantido para compatibilidade; não usado pelo pipeline MPE
     metadata_path: Path | None = None,
     relationship_path: Path | None = None,
     max_context_rows: int = 96,
     apply_audit_repair_enabled: bool = True,
     max_estimated_llm_calls: int = 30,
-    # Parâmetros legados ignorados (eram do pipeline MAP)
-    prompt_type=None,
-    prompt_critique=None,
-    context=None,
 ):
     """
     Roda um único experimento MPE, comparando Max-Product exato com LLM-MPE.
