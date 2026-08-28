@@ -266,9 +266,9 @@ def compile_semantic_messages(
         messages[variable] = message
 
         # consumir as mensagens que entraram neste bucket e publicar a nova
-        # consumed_ids = {id(m) for m in bucket.incoming_messages}
-        # active_messages = [m for m in active_messages if id(m) not in consumed_ids]
-        # active_messages.append(message)
+        consumed_ids = {id(m) for m in bucket.incoming_messages}
+        active_messages = [m for m in active_messages if id(m) not in consumed_ids]
+        active_messages.append(message)
 
     if config.show_input_data:
         print(
