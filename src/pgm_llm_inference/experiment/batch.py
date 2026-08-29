@@ -14,8 +14,11 @@ def run_batch(
     n_trials,
     llm_fn,
     inference_mode: str,
+    evidence_sampling: str = "random",   # "mpe_consistent" | "random"
+    evidence_layout: str = "independent",             # "nested" | "independent"
     base_seed=42,
     max_retries_per_trial: int = 20,
+    min_log_prob: float = -10.0,
 ):
     max_k = max(evidence_sizes)
 
@@ -28,7 +31,7 @@ def run_batch(
             # Tenta gerar um full_evidence cujos subconjuntos fatiados
             # ainda não foram vistos para nenhum k_e
             for attempt in range(max_retries_per_trial):
-                rng = random.Random(base_seed + trial * 32 + attempt * 3 + 22)
+                rng = random.Random(base_seed + trial * 32 + attempt * 3 + 23)
 
                 full_evidence = sample_mpe_consistent_evidence(
                     network, k=max_k, rng=rng,

@@ -29,8 +29,8 @@ def _compiled_path(dataset_name: str, model_name: str) -> Path:
     # "deepseek/deepseek-v4-flash" → "deepseek__deepseek-v4-flash"
     safe_model = model_name.replace("/", "__").replace(":", "-")
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
-    # return TABLES_DIR / f"{stem}.compiled.pkl"
-    return TABLES_DIR / f"{stem}.{safe_model}.compiled.pkl"
+    return TABLES_DIR / f"{stem}.compiled.pkl"
+    # return TABLES_DIR / f"{stem}.{safe_model}.compiled.pkl"
 
 def load_or_compile(
     dataset_name: str,
@@ -42,6 +42,7 @@ def load_or_compile(
     relationship_path: Path,
     llm_fn,
     use_real_llm: bool,
+    max_context_rows_per_call: int | None = None,   # ← novo
 ) -> "CompiledSemanticMessages":
     """
     Tenta carregar CompiledSemanticMessages de tables/<stem>.compiled.pkl.
@@ -66,6 +67,7 @@ def load_or_compile(
         relationship_path=relationship_path,
         llm_fn=llm_fn,
         use_real_llm=use_real_llm,
+        max_context_rows_per_call=max_context_rows_per_call,
     )
     print(f">>> [COMPILE] ✓ {len(compiled.messages)} mensagens compiladas.")
 

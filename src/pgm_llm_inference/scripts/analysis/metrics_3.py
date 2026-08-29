@@ -1213,10 +1213,10 @@ AGENT_WEIGHTS = None
 # plot_accuracy_by_confidence_per_dataset(df, datasets_per_img=5)
 # plot_global_accuracy_by_confidence(df)
 # plot_calibration_curve(df)
-# plot_variable_difficulty_analysis(df, top_n=10)
 # plot_error_cascade_per_dataset(df, datasets_per_img=5)
 # plot_error_cascade_analysis(df)
 
+plot_variable_difficulty_analysis(df, top_n=10)
 plot_grouped_accuracy(df, datasets_per_img=9, agent_weights=AGENT_WEIGHTS)
 print_paper_table(df, agent_weights=AGENT_WEIGHTS)
 print_evidence_accuracy_table(df, agent_weights=AGENT_WEIGHTS)

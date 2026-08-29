@@ -20,6 +20,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Metadados qualitativos de variável (gerados por LLM, usados nos prompts)
 # ---------------------------------------------------------------------------
 
+class DomainScores:
+    """Classe dummy apenas para permitir o carregamento do pickle antigo."""
+    pass
+
 class VariableMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 

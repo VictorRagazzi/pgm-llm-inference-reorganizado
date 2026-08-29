@@ -51,8 +51,11 @@ class ExperimentConfig:
     prompt_types: List[str] = field(default_factory=lambda: ["simple"])
     evidence_sizes: List[int] = field(default_factory=list)
     query_sizes: List[int] = field(default_factory=lambda: [1])
-    n_trials: int = 3
+    n_trials: int = 5
+    max_context_rows_per_call: int = 100
     max_estimated_llm_calls: int = 300
+    evidence_sampling: str = "random"  # "mpe_consistent" | "random"
+    evidence_layout: str = "independent"            # "nested" | "independent"
 
     def __post_init__(self):
         if self.inference_mode not in (MAP, MPE):
@@ -138,6 +141,7 @@ def run_experiment(
     )
 
     accuracy = llm_hits / len(evaluated_vars) if evaluated_vars else 0.0
+    exact_match = int(llm_hits == len(evaluated_vars)) if evaluated_vars else None
 
     # --- Print results ---
     print("\nRESULTS")
@@ -155,6 +159,9 @@ def run_experiment(
         "prompt_type": batch_cfg["prompt_type"],
         "context_type": global_cfg.context_type,
         "dataset": global_cfg.dataset_name,
+        "exact_match": exact_match,
+        "evidence_sampling": batch_cfg.get("evidence_sampling"),
+        "evidence_layout": batch_cfg.get("evidence_layout"),
         "model_name": get_model_name(global_cfg.use_real_llm),
         "evaluated_length": len(evaluated_vars),
         "evidence": evidence,
@@ -177,13 +184,18 @@ def main():
         # "crimescene.bif",
         # "insurance.bif",
         # "sachs.bif",
-        "arctic_sea.bif",
+        # "arctic_sea.bif",
+        # "sachs.bif",
 
-        # "diabets.bif",
-        # "aspergillus.bif",
+        "adhd.bif",
+        "alarm.bif",
+        "child.bif",
+        "diabets.bif",
+        "gonorrhoeae.bif",
+        "hepar2.bif",
         # "munin1.bif",
-        # "hepar2.bif",
 
+        # "aspergillus.bif",
         # "coronary.bif",
         # "coral1.bif",
         # "bankruptcy.bif",
@@ -200,75 +212,85 @@ def main():
 
     BASE_DIR = Path(__file__).resolve().parents[3]
 
-    for name in datasets:
-        print(f"\n{'=' * 60}")
-        print(f">>> Dataset: {name}")
-        print(f"{'=' * 60}")
-        cfg.dataset_name = name
+    sampling_configs = [
+        # ("mpe_consistent", "nested"),        # baseline original (favorável)
+        ("random", "independent"),           # cenário pedido pelo revisor
+    ]
 
-        # --- Carregamento da rede ---
-        path = BASE_DIR / "datasets" / name
-        network, context = load_network(str(path), cfg.context_type, llm_fn)
+    for evidence_sampling, evidence_layout in sampling_configs:
+        cfg.evidence_sampling = evidence_sampling
+        cfg.evidence_layout = evidence_layout
+        for name in datasets:
 
-        # --- COMPILAÇÃO: roda UMA vez por dataset ---
-        # Executa Bucket Elimination com evidence={} → produto cartesiano completo.
-        # Custo: N chamadas LLM (uma por variável).
-        # --- Tamanho do batch baseado na rede compilada ---
-        num_nodes = len(network.variables.keys())
-        limit = int(num_nodes * 0.5)
-        current_evidence_sizes = make_evidence_sizes(limit)
-        # current_evidence_sizes = list(range(1, limit + 1))
-        print(f"\n>>> Testando evidence sizes {current_evidence_sizes}")
+            print(f"\n{'=' * 60}")
+            print(f">>> Dataset: {name}")
+            print(f"{'=' * 60}")
+            cfg.dataset_name = name
 
+            # --- Carregamento da rede ---
+            path = BASE_DIR / "datasets" / name
+            network, context = load_network(str(path), cfg.context_type, llm_fn)
 
-        print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
-
-        model_name = inference_cfg.local_model if cfg.use_local_llm else inference_cfg.openai_model
-        compiled = load_or_compile(
-            dataset_name=name,
-            network=network,
-            model_name=model_name,
-            bif_path=path,
-            metadata_path=BASE_DIR / "metadata" / f"{name.split('.')[0]}.jsonl",
-            relationship_path=BASE_DIR / "relationships" / f"{name.split('.')[0]}.jsonl",
-            llm_fn=llm_fn,
-            use_real_llm=cfg.use_real_llm,
-        )
-        print(f">>> [COMPILE] ✓ {len(compiled.messages)} mensagens compiladas.")
+            # --- COMPILAÇÃO: roda UMA vez por dataset ---
+            # Executa Bucket Elimination com evidence={} → produto cartesiano completo.
+            # Custo: N chamadas LLM (uma por variável).
+            # --- Tamanho do batch baseado na rede compilada ---
+            num_nodes = len(network.variables.keys())
+            limit = int(num_nodes * 0.5)
+            current_evidence_sizes = make_evidence_sizes(limit)
+            # current_evidence_sizes = list(range(1, limit + 1))
+            print(f"\n>>> Testando evidence sizes {current_evidence_sizes}")
 
 
-        # --- INFERÊNCIA: roda para cada evidência — sem LLM no bucket ---
-        # Custo por inferência: 0 chamadas LLM no bucket + 2 LLM (reconstruction + audit).
-        for batch_config in run_batch(
-            network=network,
-            prompt_types=cfg.prompt_types,
-            evidence_sizes=current_evidence_sizes,
-            query_sizes=cfg.query_sizes,
-            n_trials=cfg.n_trials,
-            inference_mode=cfg.inference_mode,
-            llm_fn=llm_fn,
-        ):
-            try:
-                utils.llm_request_count = 0  # reset por tentativa
+            print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
 
-                log_data = run_experiment(
-                    network=network,
-                    batch_cfg=batch_config,
-                    global_cfg=cfg,
-                    llm_fn=llm_fn,
-                    compiled=compiled,          # ← mensagens pré-compiladas
-                    bif_path=path,              # type: ignore
-                )
+            model_name = inference_cfg.openai_model if cfg.use_real_llm else inference_cfg.local_model
+            compiled = load_or_compile(
+                dataset_name=name,
+                network=network,
+                model_name=model_name,
+                bif_path=path,
+                metadata_path=BASE_DIR / "metadata" / f"{name.split('.')[0]}.jsonl",
+                relationship_path=BASE_DIR / "relationships" / f"{name.split('.')[0]}.jsonl",
+                llm_fn=llm_fn,
+                use_real_llm=cfg.use_real_llm,
+                max_context_rows_per_call=cfg.max_context_rows_per_call,
+            )
+            print(f">>> [COMPILE] ✓ {len(compiled.messages)} mensagens compiladas.")
 
-                log_experiment(log_data)
-                # log_experiment_csv(log_data)
 
-            except Exception as e:
-                print(f"❌ Error in {name}: {e}")
+            # --- INFERÊNCIA: roda para cada evidência — sem LLM no bucket ---
+            # Custo por inferência: 0 chamadas LLM no bucket + 2 LLM (reconstruction + audit).
+            for batch_config in run_batch(
+                network=network,
+                prompt_types=cfg.prompt_types,
+                evidence_sizes=current_evidence_sizes,
+                query_sizes=cfg.query_sizes,
+                n_trials=cfg.n_trials,
+                inference_mode=cfg.inference_mode,
+                llm_fn=llm_fn,
+            ):
+                try:
+                    utils.llm_request_count = 0  # reset por tentativa
 
-        _notify_beep(440, 500)
+                    log_data = run_experiment(
+                        network=network,
+                        batch_cfg=batch_config,
+                        global_cfg=cfg,
+                        llm_fn=llm_fn,
+                        compiled=compiled,          # ← mensagens pré-compiladas
+                        bif_path=path,              # type: ignore
+                    )
 
-    _notify_beep(600, 1000)
+                    log_experiment(log_data)
+                    # log_experiment_csv(log_data)
+
+                except Exception as e:
+                    print(f"❌ Error in {name}: {e}")
+
+            _notify_beep(440, 500)
+
+        _notify_beep(600, 1000)
 
 
 if __name__ == "__main__":
