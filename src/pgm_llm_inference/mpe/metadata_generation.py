@@ -126,7 +126,9 @@ network structure.
 ═══════════════════════════════════════════════════════════════════════════
 BAYESIAN NETWORK STRUCTURE  ({n} variables)
 ═══════════════════════════════════════════════════════════════════════════
- 
+
+Network name: {bn.name or "unnamed"} 
+
 {variables_section}
  
 ═══════════════════════════════════════════════════════════════════════════
@@ -212,6 +214,8 @@ describe.
 constrain.
   • Isolated nodes: (1) and (5) only.
   • Intermediate nodes: all five sub-points are expected.
+
+  
  
 ── aliases ───────────────────────────────────────────────────────────────
  

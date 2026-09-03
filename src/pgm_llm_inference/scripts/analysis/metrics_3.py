@@ -1206,7 +1206,6 @@ AGENT_WEIGHTS = None
 # plot_dataset_accuracy(df, datasets_per_img=8)
 # plot_global_average_accuracy(df)
 
-# plot_accuracy_by_evidence_per_dataset(df, datasets_per_img=5)
 
 # plot_expert_ensemble_accuracy(df, agent_weights=AGENT_WEIGHTS)
 # plot_global_accuracy_by_evidence(df)
@@ -1216,7 +1215,8 @@ AGENT_WEIGHTS = None
 # plot_error_cascade_per_dataset(df, datasets_per_img=5)
 # plot_error_cascade_analysis(df)
 
-plot_variable_difficulty_analysis(df, top_n=10)
+# plot_accuracy_by_evidence_per_dataset(df, datasets_per_img=5)
+# plot_variable_difficulty_analysis(df, top_n=10)
 plot_grouped_accuracy(df, datasets_per_img=9, agent_weights=AGENT_WEIGHTS)
-print_paper_table(df, agent_weights=AGENT_WEIGHTS)
-print_evidence_accuracy_table(df, agent_weights=AGENT_WEIGHTS)
+# print_paper_table(df, agent_weights=AGENT_WEIGHTS)
+# print_evidence_accuracy_table(df, agent_weights=AGENT_WEIGHTS)

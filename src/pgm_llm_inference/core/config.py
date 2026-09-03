@@ -6,7 +6,7 @@ class InferenceConfig(BaseSettings):
     # Logging
     verbose: bool = False
     log_level: str = "INFO"
-    log_file_name: str = "logs/last_3.jsonl"
+    log_file_name: str = "logs/cbeb_local.jsonl"
 
     # Numerical stability
     epsilon: float = 1e-10
@@ -14,7 +14,7 @@ class InferenceConfig(BaseSettings):
     # Elimination ordering
     default_ordering_heuristic: str = "min_degree" # "min_degree" or "max_degree" or "topological" or "reverse_topological" or "central" or "random"
         
-    show_input_data: bool = False
+    show_input_data: bool = True
     show_llm_prompt: bool = False
     show_llm_output: bool = False
     mock: bool = False

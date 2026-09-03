@@ -30,7 +30,7 @@ def _compiled_path(dataset_name: str, model_name: str) -> Path:
     safe_model = model_name.replace("/", "__").replace(":", "-")
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     return TABLES_DIR / f"{stem}.compiled.pkl"
-    # return TABLES_DIR / f"{stem}.{safe_model}.compiled.pkl"
+    # return TABLES_DIR / f"{stem}.{safe_model}_VE.compiled.pkl"
 
 def load_or_compile(
     dataset_name: str,

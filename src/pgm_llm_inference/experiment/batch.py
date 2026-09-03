@@ -2,8 +2,36 @@ import random
 from pgm_llm_inference.experiment.sampling import (
     sample_random_evidence,
     sample_query_vars,
-    sample_mpe_consistent_evidence
+    sample_mpe_consistent_evidence,
+    sample_mpe_inconsistent_evidence
 )
+
+def _sample_full_evidence(
+    network,
+    k: int,
+    evidence_sampling: str,
+    rng: random.Random,
+    min_log_prob: float,
+):
+    """
+    Dispatcher: gera a evidência completa (tamanho k) de acordo com o
+    critério escolhido em evidence_sampling.
+    """
+    if evidence_sampling == "mpe_consistent":
+        return sample_mpe_consistent_evidence(
+            network, k=k, rng=rng,
+        )
+    elif evidence_sampling == "mpe_inconsistent":
+        return sample_mpe_inconsistent_evidence(
+            network, k=k, rng=rng,
+        )
+    elif evidence_sampling == "random":
+        return sample_random_evidence(
+            network, k=k, rng=rng, min_log_prob=min_log_prob,
+        )
+    else:
+        raise ValueError(f"Unknown evidence_sampling: {evidence_sampling!r}")
+
 
 def run_batch(
     *,
@@ -14,7 +42,7 @@ def run_batch(
     n_trials,
     llm_fn,
     inference_mode: str,
-    evidence_sampling: str = "random",   # "mpe_consistent" | "random"
+    evidence_sampling: str = "random",   # "mpe_consistent" | "mpe_inconsistent" | "random"
     evidence_layout: str = "independent",             # "nested" | "independent"
     base_seed=42,
     max_retries_per_trial: int = 20,
@@ -31,11 +59,14 @@ def run_batch(
             # Tenta gerar um full_evidence cujos subconjuntos fatiados
             # ainda não foram vistos para nenhum k_e
             for attempt in range(max_retries_per_trial):
-                rng = random.Random(base_seed + trial * 32 + attempt * 3 + 23)
+                rng = random.Random(base_seed + trial * 32 + attempt * 3 + 22)
 
-                full_evidence = sample_mpe_consistent_evidence(
-                    network, k=max_k, rng=rng,
-                    # não passa seen aqui — o controle é feito abaixo por subconjunto
+                full_evidence = _sample_full_evidence(
+                    network,
+                    k=max_k,
+                    evidence_sampling=evidence_sampling,
+                    rng=rng,
+                    min_log_prob=min_log_prob,
                 )
 
                 ordered_vars = list(full_evidence.items())

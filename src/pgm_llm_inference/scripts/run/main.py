@@ -52,9 +52,9 @@ class ExperimentConfig:
     evidence_sizes: List[int] = field(default_factory=list)
     query_sizes: List[int] = field(default_factory=lambda: [1])
     n_trials: int = 5
-    max_context_rows_per_call: int = 100
+    max_context_rows_per_call: int = 96
     max_estimated_llm_calls: int = 300
-    evidence_sampling: str = "random"  # "mpe_consistent" | "random"
+    evidence_sampling: str = "mpe_consistent"   # "mpe_consistent" | "mpe_inconsistent" | "random"
     evidence_layout: str = "independent"            # "nested" | "independent"
 
     def __post_init__(self):
@@ -160,8 +160,8 @@ def run_experiment(
         "context_type": global_cfg.context_type,
         "dataset": global_cfg.dataset_name,
         "exact_match": exact_match,
-        "evidence_sampling": batch_cfg.get("evidence_sampling"),
-        "evidence_layout": batch_cfg.get("evidence_layout"),
+        "evidence_sampling": global_cfg.evidence_sampling,
+        # "evidence_layout": batch_cfg.get("evidence_layout"),
         "model_name": get_model_name(global_cfg.use_real_llm),
         "evaluated_length": len(evaluated_vars),
         "evidence": evidence,
@@ -187,14 +187,20 @@ def main():
         # "arctic_sea.bif",
         # "sachs.bif",
 
-        "adhd.bif",
-        "alarm.bif",
-        "child.bif",
-        "diabets.bif",
-        "gonorrhoeae.bif",
-        "hepar2.bif",
-        # "munin1.bif",
+        "adhd_cbeb.bif",
+        "covid3_cbeb.bif", # ERRO
+        "covid1_cbeb.bif", # ERRO
+        "gonorrhoeae_cbeb.bif",
+        "hepar2_cbeb.bif",
+        "alarm_cbeb.bif",
+        "foodallergy3_cbeb.bif",
+        "foodallergy1_cbeb.bif",
+        "diabets_cbeb.bif",
+        "child_cbeb.bif",
+        # "urinary_cbeb.bif",
 
+        # "cardiovascular_cbeb.bif", # ERRO
+        # "munin1_cbeb.bif",
         # "aspergillus.bif",
         # "coronary.bif",
         # "coral1.bif",
@@ -211,86 +217,92 @@ def main():
     llm_fn = build_llm_fn(use_real_llm=cfg.use_real_llm, use_local_llm=cfg.use_local_llm)
 
     BASE_DIR = Path(__file__).resolve().parents[3]
+    for name in datasets:
 
-    sampling_configs = [
-        # ("mpe_consistent", "nested"),        # baseline original (favorável)
-        ("random", "independent"),           # cenário pedido pelo revisor
-    ]
+        print(f"\n{'=' * 60}")
+        print(f">>> Dataset: {name}")
+        print(f"{'=' * 60}")
+        cfg.dataset_name = name
 
-    for evidence_sampling, evidence_layout in sampling_configs:
-        cfg.evidence_sampling = evidence_sampling
-        cfg.evidence_layout = evidence_layout
-        for name in datasets:
+        # --- Carregamento da rede ---
+        path = BASE_DIR / "datasets" / name
+        network, context = load_network(str(path), cfg.context_type, llm_fn)
 
-            print(f"\n{'=' * 60}")
-            print(f">>> Dataset: {name}")
-            print(f"{'=' * 60}")
-            cfg.dataset_name = name
+        # --- Tamanho do batch baseado na rede ---
+        num_nodes = len(network.variables.keys())
+        limit = int(num_nodes * 0.5)
+        current_evidence_sizes = make_evidence_sizes(limit)
+        print(f"\n>>> Testando evidence sizes {current_evidence_sizes}")
 
-            # --- Carregamento da rede ---
-            path = BASE_DIR / "datasets" / name
-            network, context = load_network(str(path), cfg.context_type, llm_fn)
+        # Tentativas com max_context_rows_per_call decrescente: valor original → 76 → 64
+        retry_context_rows = [cfg.max_context_rows_per_call, cfg.max_context_rows_per_call - 20, cfg.max_context_rows_per_call - 30]
+        dataset_ok = False
 
-            # --- COMPILAÇÃO: roda UMA vez por dataset ---
-            # Executa Bucket Elimination com evidence={} → produto cartesiano completo.
-            # Custo: N chamadas LLM (uma por variável).
-            # --- Tamanho do batch baseado na rede compilada ---
-            num_nodes = len(network.variables.keys())
-            limit = int(num_nodes * 0.5)
-            current_evidence_sizes = make_evidence_sizes(limit)
-            # current_evidence_sizes = list(range(1, limit + 1))
-            print(f"\n>>> Testando evidence sizes {current_evidence_sizes}")
+        for attempt, max_rows in enumerate(retry_context_rows):
+            if attempt > 0:
+                print(f"\n⚠️  Tentativa {attempt + 1}/3 para '{name}' com max_context_rows_per_call={max_rows}...")
+            try:
+                # --- COMPILAÇÃO: roda UMA vez por dataset ---
+                # Executa Bucket Elimination com evidence={} → produto cartesiano completo.
+                # Custo: N chamadas LLM (uma por variável).
+                print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
 
+                model_name = inference_cfg.openai_model if cfg.use_real_llm else inference_cfg.local_model
+                compiled = load_or_compile(
+                    dataset_name=name,
+                    network=network,
+                    model_name=model_name,
+                    bif_path=path,
+                    metadata_path=BASE_DIR / "metadata" / f"{name.split('.')[0]}.jsonl",
+                    relationship_path=BASE_DIR / "relationships" / f"{name.split('.')[0]}.jsonl",
+                    llm_fn=llm_fn,
+                    use_real_llm=cfg.use_real_llm,
+                    max_context_rows_per_call=max_rows,
+                )
+                print(f">>> [COMPILE] ✓ {len(compiled.messages)} mensagens compiladas.")
 
-            print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
+                # --- INFERÊNCIA: roda para cada evidência — sem LLM no bucket ---
+                # Custo por inferência: 0 chamadas LLM no bucket + 2 LLM (reconstruction + audit).
+                for batch_config in run_batch(
+                    network=network,
+                    prompt_types=cfg.prompt_types,
+                    evidence_sizes=current_evidence_sizes,
+                    query_sizes=cfg.query_sizes,
+                    n_trials=cfg.n_trials,
+                    inference_mode=cfg.inference_mode,
+                    llm_fn=llm_fn,
+                    evidence_sampling=cfg.evidence_sampling,
+                ):
+                    try:
+                        utils.llm_request_count = 0  # reset por tentativa
 
-            model_name = inference_cfg.openai_model if cfg.use_real_llm else inference_cfg.local_model
-            compiled = load_or_compile(
-                dataset_name=name,
-                network=network,
-                model_name=model_name,
-                bif_path=path,
-                metadata_path=BASE_DIR / "metadata" / f"{name.split('.')[0]}.jsonl",
-                relationship_path=BASE_DIR / "relationships" / f"{name.split('.')[0]}.jsonl",
-                llm_fn=llm_fn,
-                use_real_llm=cfg.use_real_llm,
-                max_context_rows_per_call=cfg.max_context_rows_per_call,
-            )
-            print(f">>> [COMPILE] ✓ {len(compiled.messages)} mensagens compiladas.")
+                        log_data = run_experiment(
+                            network=network,
+                            batch_cfg=batch_config,
+                            global_cfg=cfg,
+                            llm_fn=llm_fn,
+                            compiled=compiled,          # ← mensagens pré-compiladas
+                            bif_path=path,              # type: ignore
+                        )
 
+                        log_experiment(log_data)
+                        # log_experiment_csv(log_data)
 
-            # --- INFERÊNCIA: roda para cada evidência — sem LLM no bucket ---
-            # Custo por inferência: 0 chamadas LLM no bucket + 2 LLM (reconstruction + audit).
-            for batch_config in run_batch(
-                network=network,
-                prompt_types=cfg.prompt_types,
-                evidence_sizes=current_evidence_sizes,
-                query_sizes=cfg.query_sizes,
-                n_trials=cfg.n_trials,
-                inference_mode=cfg.inference_mode,
-                llm_fn=llm_fn,
-            ):
-                try:
-                    utils.llm_request_count = 0  # reset por tentativa
+                    except Exception as e:
+                        print(f"❌ Error in experiment ({name}): {e}")
 
-                    log_data = run_experiment(
-                        network=network,
-                        batch_cfg=batch_config,
-                        global_cfg=cfg,
-                        llm_fn=llm_fn,
-                        compiled=compiled,          # ← mensagens pré-compiladas
-                        bif_path=path,              # type: ignore
-                    )
+                dataset_ok = True
+                break  # sucesso — não precisa tentar novamente
 
-                    log_experiment(log_data)
-                    # log_experiment_csv(log_data)
+            except Exception as e:
+                print(f"❌ Falha na tentativa {attempt + 1}/3 para '{name}' (max_context_rows_per_call={max_rows}): {e}")
 
-                except Exception as e:
-                    print(f"❌ Error in {name}: {e}")
+        if not dataset_ok:
+            print(f"\n⛔ Todas as tentativas falharam para '{name}'. Pulando para o próximo dataset.\n")
 
-            _notify_beep(440, 500)
+        _notify_beep(440, 500)
 
-        _notify_beep(600, 1000)
+    _notify_beep(600, 1000)
 
 
 if __name__ == "__main__":
