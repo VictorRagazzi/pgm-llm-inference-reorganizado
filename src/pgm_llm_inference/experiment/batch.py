@@ -40,10 +40,8 @@ def run_batch(
     evidence_sizes,
     query_sizes,
     n_trials,
-    llm_fn,
     inference_mode: str,
     evidence_sampling: str = "random",   # "mpe_consistent" | "mpe_inconsistent" | "random"
-    evidence_layout: str = "independent",             # "nested" | "independent"
     base_seed=42,
     max_retries_per_trial: int = 20,
     min_log_prob: float = -10.0,

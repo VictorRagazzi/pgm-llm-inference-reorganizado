@@ -78,7 +78,7 @@ def extract_argmax_from_factor(factor, target_var: str) -> str:
 
     var_index = next(i for i, v in enumerate(scope) if v.name == target_var)
     var = scope[var_index]
-    domain = var.domain
+    domain = var.states
 
     axes_to_sum = tuple(i for i in range(values.ndim) if i != var_index)
     probs = values.sum(axis=axes_to_sum) if axes_to_sum else values
@@ -100,8 +100,7 @@ def run_single_mpe_experiment(
     metadata_path: Path | None = None,
     relationship_path: Path | None = None,
     max_context_rows: int = 96,
-    apply_audit_repair_enabled: bool = True,
-    max_estimated_llm_calls: int = 30,
+    max_hidden_variables: int = 30,
 ):
     """
     Roda um único experimento MPE, comparando Max-Product exato com LLM-MPE.
@@ -117,10 +116,10 @@ def run_single_mpe_experiment(
     print(f"Hidden vars: {hidden_vars}")
     print("=" * 60)
 
-    if len(hidden_vars) > max_estimated_llm_calls:
+    if len(hidden_vars) > max_hidden_variables:
         raise ValueError(
-            f"Hidden vars ({len(hidden_vars)}) exceeds max_estimated_llm_calls "
-            f"({max_estimated_llm_calls}). Skipping."
+            f"Hidden vars ({len(hidden_vars)}) exceeds max_hidden_variables "
+            f"({max_hidden_variables}). Skipping."
         )
 
     # MPE exato (referência numérica)
@@ -143,8 +142,6 @@ def run_single_mpe_experiment(
     llm_predictions, confidence_map, llm_cpt = infer_from_compiled(
         compiled=compiled,
         evidence=evidence,
-        llm_fn=llm_fn,
-        apply_audit_repair_enabled=apply_audit_repair_enabled,
     )
 
     print("\nRESULTS")

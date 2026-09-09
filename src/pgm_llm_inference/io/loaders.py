@@ -6,14 +6,12 @@ from pgm_llm_inference.core.conversion import convert_pgmpy_model, parse_dne_to_
 from pgm_llm_inference.models import BayesianNetwork
 
 
-def load_network(path: str, context_type=None, llm_fn=None) -> tuple:
+def load_network(path: str | Path) -> BayesianNetwork:
     """
-    Carrega um arquivo de rede Bayesiana (.bif, .bif.gz, .xdsl, .xdsl.gz,
-    .net, .dne, .dne.gz) e retorna (BayesianNetwork, context_str).
+    Carrega uma rede Bayesiana suportada e retorna o modelo interno.
 
-    context_type e llm_fn são mantidos na assinatura para compatibilidade,
-    mas o sistema de contexto MAP foi removido. context_type deve ser None;
-    context retornado é sempre "".
+    Formatos: .bif, .bif.gz, .xdsl, .xdsl.gz, .net, .net.gz, .dsc,
+    .dsc.gz, .dne e .dne.gz.
     """
     from pgmpy.readwrite import BIFReader, XDSLReader, NETReader
 
@@ -48,5 +46,4 @@ def load_network(path: str, context_type=None, llm_fn=None) -> tuple:
             "Supported formats: .bif(.gz), .xdsl(.gz), .net(.gz), .dsc(.gz), .dne(.gz)"
         )
 
-    converted_model = convert_pgmpy_model(model)
-    return converted_model, ""
+    return convert_pgmpy_model(model)

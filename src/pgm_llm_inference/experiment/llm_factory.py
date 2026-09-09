@@ -1,8 +1,6 @@
 from pgm_llm_inference.core.config import InferenceConfig
 from pgm_llm_inference.strategies.llm.openai import create_openai_llm_function
 from pgm_llm_inference.strategies.llm.local import local_llm_structured
-from pydantic import BaseModel
-from typing import Callable, Literal
 
 def get_model_name(use_real_llm: bool) -> str:
     config = InferenceConfig()

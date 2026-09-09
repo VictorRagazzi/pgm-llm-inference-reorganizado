@@ -43,7 +43,7 @@ class MaxProductStrategy(EliminationStrategy):
                 continue
 
             key = tuple(
-                scope[i].domain.index(result[scope[i].name])
+                scope[i].states.index(result[scope[i].name])
                 for i in range(len(scope))
                 if scope[i].name in result
             )

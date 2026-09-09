@@ -61,7 +61,7 @@ def _sample_once_inconsistent(
     mpe_assignment = mpe_unconditional["map_assignment"]
 
     # Só variáveis com domínio > 1 podem receber valor "inconsistente"
-    invertible = [v for v in candidates_sorted if len(v.domain) > 1]
+    invertible = [v for v in candidates_sorted if len(v.states) > 1]
 
     k = min(k, len(invertible))
     selected = invertible[:k]
@@ -69,7 +69,7 @@ def _sample_once_inconsistent(
     result = {}
     for var in selected:
         mpe_value = mpe_assignment[var.name]
-        alternatives = [val for val in var.domain if val != mpe_value]
+        alternatives = [val for val in var.states if val != mpe_value]
         result[var.name] = rng.choice(alternatives)
 
     return result
@@ -99,7 +99,7 @@ def sample_random_evidence(
     for attempt in range(max_attempts):
         chosen_vars = rng.sample(candidates, k)
         evidence = {
-            v.name: rng.choice(v.domain)
+            v.name: rng.choice(v.states)
             for v in chosen_vars
         }
 
@@ -165,7 +165,7 @@ def compute_log_joint(
         # Índice do valor do filho
         child_var = factor.scope[0]
         try:
-            child_idx = child_var.domain.index(value)
+            child_idx = child_var.states.index(value)
         except ValueError:
             return float("-inf")
 
@@ -173,7 +173,7 @@ def compute_log_joint(
         parent_indices = []
         for p in parent_vars:
             try:
-                parent_indices.append(p.domain.index(evidence[p.name]))
+                parent_indices.append(p.states.index(evidence[p.name]))
             except ValueError:
                 return float("-inf")
 

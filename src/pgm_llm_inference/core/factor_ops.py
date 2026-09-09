@@ -13,7 +13,6 @@ Correctness of these operations is CRITICAL for correct inference.
 """
 
 import numpy as np
-from numpy.typing import NDArray
 
 from ..models import Factor, Variable
 
@@ -172,7 +171,7 @@ def maximize_factor(factor: Factor, variable: Variable) -> tuple[Factor, dict[tu
     # Iterate over all configurations of remaining variables
     for idx in np.ndindex(argmax_indices.shape):
         optimal_idx = argmax_indices[idx]
-        optimal_value = variable.domain[optimal_idx]
+        optimal_value = variable.states[optimal_idx]
         argmax_map[idx] = optimal_value
 
     # Handle edge case: if scope becomes empty, return scalar factor
@@ -181,7 +180,7 @@ def maximize_factor(factor: Factor, variable: Variable) -> tuple[Factor, dict[tu
         result_scope = [scalar_var]
         max_values = np.array([max_values, 0.0])
         # Argmax map for scalar: just store the optimal value
-        argmax_map = {(0,): variable.domain[argmax_indices.item()]}
+        argmax_map = {(0,): variable.states[argmax_indices.item()]}
 
     return Factor(scope=result_scope, values=max_values), argmax_map
 
@@ -229,10 +228,10 @@ def reduce_factor(factor: Factor, evidence: dict[str, str]) -> Factor:
 
         # Find the index of the observed value in the domain
         try:
-            value_idx = var_obj.domain.index(observed_value)
+            value_idx = var_obj.states.index(observed_value)
         except ValueError:
             raise ValueError(
-                f"Evidence value '{observed_value}' not in domain {var_obj.domain} "
+                f"Evidence value '{observed_value}' not in domain {list(var_obj.states)} "
                 f"for variable '{var_name}'"
             )
 
@@ -310,10 +309,10 @@ def get_factor_value(factor: Factor, assignment: dict[str, str]) -> float:
 
         value = assignment[var.name]
         try:
-            idx = var.domain.index(value)
+            idx = var.states.index(value)
         except ValueError:
             raise ValueError(
-                f"Value '{value}' not in domain {var.domain} for variable '{var.name}'"
+                f"Value '{value}' not in domain {list(var.states)} for variable '{var.name}'"
             )
 
         indices.append(idx)

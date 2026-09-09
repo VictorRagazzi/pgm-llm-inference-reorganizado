@@ -1,6 +1,8 @@
 from pathlib import Path
 import re
 
+from pgm_llm_inference.paths import dataset_path
+
 
 VARIABLE_NAME_MAP = {
     "GoodStudent": "is_good_student",
@@ -51,7 +53,7 @@ def rename_bif_variables(
 if __name__ == "__main__":
     dataset_name = "insurance.bif"
 
-    path = Path(__file__).resolve().parents[2] / "datasets" / dataset_name
+    path = dataset_path(dataset_name)
     
     input_bif = Path(path)
     output_bif = Path(path)

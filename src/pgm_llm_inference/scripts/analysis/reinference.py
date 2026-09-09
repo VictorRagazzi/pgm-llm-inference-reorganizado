@@ -24,10 +24,9 @@ from pgm_llm_inference.models import BayesianNetwork
 from pgm_llm_inference.core.config import InferenceConfig
 from pgm_llm_inference.io.loaders import load_network
 from pgm_llm_inference.experiment.llm_factory import build_llm_fn
+from pgm_llm_inference.paths import DATASETS_DIR
 
 config = InferenceConfig()
-
-DATASETS_DIR = Path(__file__).resolve().parents[2] / "datasets"
 
 
 class ReInferenceResult(BaseModel):
@@ -69,8 +68,8 @@ def run_reinference(
     input_path = Path(log_file_path)
     output_path = input_path.with_name(f"{input_path.stem}_re{input_path.suffix}")
 
-    with open(input_path, 'r', encoding='utf-8') as f:
-        all_lines = [json.loads(l) for l in f if l.strip()]
+    with open(input_path, "r", encoding="utf-8") as file:
+        all_lines = [json.loads(line) for line in file if line.strip()]
 
     if datasets_to_run:
         filtered_data = [d for d in all_lines if d.get("dataset") in datasets_to_run]
@@ -96,12 +95,14 @@ def run_reinference(
                 dataset_name = data.get("dataset")
                 if dataset_name not in dataset_cache:
                     dataset_path = datasets_dir / dataset_name
-                    network, _ = load_network(str(dataset_path), None, llm_fn)
-                    node_domains = {name: var.domain for name, var in network.variables.items()}
-                    edges, markov_blankets = _extract_edges_and_markov_blankets(network)
-                    dataset_cache[dataset_name] = (network, node_domains, edges, markov_blankets)
+                    network = load_network(dataset_path)
+                    node_domains = {
+                        name: list(var.states) for name, var in network.variables.items()
+                    }
+                    markov_blankets = _extract_markov_blankets(network)
+                    dataset_cache[dataset_name] = (node_domains, markov_blankets)
                 else:
-                    network, node_domains, edges, markov_blankets = dataset_cache[dataset_name]
+                    node_domains, markov_blankets = dataset_cache[dataset_name]
 
                 evidences = data.get("evidence", {})
                 predictions = data.get("llm_predictions", {})
@@ -113,13 +114,6 @@ def run_reinference(
                     continue
 
                 domain_info = {var: node_domains.get(var, "Unknown") for var in target_vars}
-
-                # Only include edges relevant to target variables
-                nodes_of_interest = set(target_vars) | set(evidences.keys())
-                relevant_edges = [
-                    e for e in edges
-                    if e[0] in nodes_of_interest or e[1] in nodes_of_interest
-                ]
 
                 # Only include Markov blankets for target variables
                 relevant_blankets = {
@@ -262,22 +256,17 @@ Values must match the domain list exactly. No extra fields.
     print("=" * 60)
 
 
-def _extract_edges_and_markov_blankets(network: BayesianNetwork) -> tuple[list, dict]:
-    """
-    Derives edges and Markov blankets from the network's factors.
-    In each factor, scope[0] is the child and scope[1:] are its parents.
-    """
+def _extract_markov_blankets(network: BayesianNetwork) -> dict:
+    """Derive Markov blankets from the network factors."""
     parents: dict[str, set] = {name: set() for name in network.variables}
     children: dict[str, set] = {name: set() for name in network.variables}
 
-    edges = []
     for factor in network.factors:
         if len(factor.scope) < 2:
-            continue  # root node (no parents), no edges to add
+            continue
         child = factor.scope[0].name
         for parent_var in factor.scope[1:]:
             parent = parent_var.name
-            edges.append((parent, child))
             parents[child].add(parent)
             children[parent].add(child)
 
@@ -296,7 +285,7 @@ def _extract_edges_and_markov_blankets(network: BayesianNetwork) -> tuple[list, 
             "co_parents": sorted(coparents),
         }
 
-    return edges, blankets
+    return blankets
 
 if __name__ == "__main__":
     LOG_PATH = config.log_file_name 

@@ -20,47 +20,31 @@ campos novos, usados depois em analysis_evidence_position.py:
     - "node_depth"            : profundidade absoluta do nó (raiz = 0)
     - "node_depth_normalized": node_depth / profundidade_máxima_da_rede
 
-IMPORTANTE — ajustar antes de rodar:
-    - Os imports abaixo assumem os mesmos caminhos de módulo vistos no
-      código colado (`run_experiment`, `ExperimentConfig`, `MPE` no script
-      principal de experimentos; `extract_graph_structure` em get_table.py).
-      Ajuste os caminhos conforme a localização real desses símbolos no
-      seu projeto.
+IMPORTANTE — antes de rodar:
     - Se `log_experiment()` escreve sempre no mesmo arquivo de log
       configurado em InferenceConfig, os logs deste experimento vão ficar
       misturados com os do experimento de proporção no mesmo arquivo — o
       campo "experiment" serve exatamente para separá-los depois. Se
       preferir um arquivo separado, ajuste log_experiment/InferenceConfig
       para apontar para outro arquivo antes de rodar este script.
-    - Este script não foi executado (o pacote pgm_llm_inference não está
-      disponível neste ambiente) — recomendo testar primeiro com 1 dataset
-      pequeno antes de rodar nas 10 redes.
+    - Recomenda-se testar primeiro com um dataset pequeno antes de rodar as
+      dez redes.
 """
 
 import json
-from pathlib import Path
 
-from pgm_llm_inference.core.config import InferenceConfig
-import pgm_llm_inference.utils as utils
-from pgm_llm_inference.utils import load_or_compile
+from pgm_llm_inference.mpe.cache import load_or_compile
 from pgm_llm_inference.io.loaders import load_network
 from pgm_llm_inference.logging.experiment_logger import LOG_PATH, log_experiment
-from pgm_llm_inference.experiment.llm_factory import build_llm_fn
+from pgm_llm_inference.experiment.config import ExperimentConfig, MPE
+from pgm_llm_inference.experiment.llm_factory import build_llm_fn, get_model_name
 from pgm_llm_inference.experiment.experiment import run_max_product, get_hidden_vars
-
-# Reaproveita a lógica de inferência + métricas já implementada, em vez de
-# duplicá-la. Ajuste o caminho do import conforme o nome real do módulo
-# que contém run_experiment/ExperimentConfig/MAP/MPE no seu projeto.
-from pgm_llm_inference.scripts.run.main import run_experiment, ExperimentConfig, MPE
-
-# extract_graph_structure e compute_node_depths — a segunda função precisa
-# ser adicionada a get_table.py (ver get_table_additions.py).
-from pgm_llm_inference.scripts.analysis.get_table import (
-    extract_graph_structure,
+from pgm_llm_inference.experiment.runner import run_experiment
+from pgm_llm_inference.paths import dataset_path, metadata_path, relationship_path
+from pgm_llm_inference.analysis.structure import (
     compute_node_depths,
+    extract_graph_structure,
 )
-
-inference_cfg = InferenceConfig()
 
 DATASETS = [
     "adhd_cbeb.bif",
@@ -100,13 +84,12 @@ def completed_evidence_nodes(dataset_name: str) -> set[str]:
 
 def run_evidence_position_for_dataset(
     name: str,
-    base_dir: Path,
     llm_fn,
     cfg: ExperimentConfig,
     max_context_rows_per_call: int = 96,
 ) -> None:
-    path = base_dir / "datasets" / name
-    network, _ = load_network(str(path), cfg.context_type, llm_fn)
+    path = dataset_path(name)
+    network = load_network(path)
 
     # --- Profundidade normalizada por nó (0 = raiz, 1 = folha mais funda) ---
     parents, children, _ = extract_graph_structure(network)
@@ -125,14 +108,13 @@ def run_evidence_position_for_dataset(
     mpe_assignment = full_mpe["map_assignment"]
 
     # --- Compilação (uma vez por dataset, igual ao script principal) ---
-    model_name = inference_cfg.openai_model if cfg.use_real_llm else inference_cfg.local_model
     compiled = load_or_compile(
         dataset_name=name,
+        model_name=get_model_name(cfg.use_real_llm),
         network=network,
-        model_name=model_name,
         bif_path=path,
-        metadata_path=base_dir / "metadata" / f"{name.split('.')[0]}.jsonl",
-        relationship_path=base_dir / "relationships" / f"{name.split('.')[0]}.jsonl",
+        metadata_path=metadata_path(name),
+        relationship_path=relationship_path(name),
         llm_fn=llm_fn,
         use_real_llm=cfg.use_real_llm,
         max_context_rows_per_call=max_context_rows_per_call,
@@ -164,14 +146,11 @@ def run_evidence_position_for_dataset(
         }
 
         try:
-            utils.llm_request_count = 0  # reset por execução
             log_data = run_experiment(
                 network=network,
-                batch_cfg=batch_cfg,
-                global_cfg=cfg,
-                llm_fn=llm_fn,
+                batch_config=batch_cfg,
+                config=cfg,
                 compiled=compiled,
-                bif_path=path,
             )
         except Exception as e:
             print(f"  ❌ [{i}/{n_vars}] erro no nó evidência '{node}': {e}")
@@ -196,13 +175,10 @@ def main():
         inference_mode=MPE,
     )
     llm_fn = build_llm_fn(use_real_llm=cfg.use_real_llm, use_local_llm=cfg.use_local_llm)
-    # .../src/pgm_llm_inference/scripts/run/run_evidence_pos.py -> raiz do repositório
-    base_dir = Path(__file__).resolve().parents[4]
-
     for name in DATASETS:
         print(f"\n{'=' * 60}\n>>> Posição da evidência — Dataset: {name}\n{'=' * 60}")
         try:
-            run_evidence_position_for_dataset(name, base_dir, llm_fn, cfg)
+            run_evidence_position_for_dataset(name, llm_fn, cfg)
         except Exception as e:
             print(f"❌ Falha em '{name}': {e}")
 

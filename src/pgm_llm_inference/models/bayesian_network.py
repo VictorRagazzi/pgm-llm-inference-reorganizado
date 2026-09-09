@@ -19,7 +19,7 @@ class BayesianNetwork(BaseModel):
 
     2. Pipeline MPE (via mpe/io.py → parse_bif):
        - `factors` vazio (sem CPTs numéricas).
-       - `parents` fornecido explicitamente via `_parents`.
+       - `explicit_parents` fornecido pelo parser.
        - `name` preenchido com o nome da rede do arquivo .bif.
 
     A property `parents` resolve isso: retorna `_parents` se fornecido,
@@ -29,24 +29,12 @@ class BayesianNetwork(BaseModel):
     name: str = ""
     variables: dict[str, Variable] = Field(default_factory=dict)
     factors: list[Factor] = Field(default_factory=list)
-    # Topologia explícita — usada pelo pipeline MPE (parse_bif).
-    # Quando None, parents é derivado de factors (modo VE numérico).
-    _parents: dict[str, tuple[str, ...]] | None = None
+    explicit_parents: dict[str, tuple[str, ...]] | None = Field(
+        default=None,
+        exclude=True,
+    )
 
     model_config = {"arbitrary_types_allowed": True}
-
-    def model_post_init(self, __context) -> None:
-        # Captura o campo `parents` passado no construtor antes que Pydantic o descarte
-        pass
-
-    @classmethod
-    def model_validate(cls, obj, *args, **kwargs):
-        return super().model_validate(obj, *args, **kwargs)
-
-    def __init__(self, *, parents: dict[str, tuple[str, ...]] | None = None, **data):
-        super().__init__(**data)
-        if parents is not None:
-            object.__setattr__(self, "_parents", parents)
 
     @model_validator(mode="after")
     def validate_factor_scopes(self) -> "BayesianNetwork":
@@ -105,11 +93,11 @@ class BayesianNetwork(BaseModel):
         Mapa de pais de cada variável.
 
         Prioridade:
-        1. `_parents` fornecido explicitamente (parse_bif / pipeline MPE).
+        1. `explicit_parents` fornecido por parse_bif.
         2. Derivado dos `factors` (convention: scope[0]=filho, scope[1:]=pais).
         """
-        if self._parents is not None:
-            return self._parents
+        if self.explicit_parents is not None:
+            return self.explicit_parents
         result: dict[str, tuple[str, ...]] = {name: () for name in self.variables}
         for factor in self.factors:
             if len(factor.scope) > 1:

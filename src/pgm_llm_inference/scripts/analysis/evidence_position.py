@@ -1,10 +1,8 @@
 """
 Análise do experimento de posição da evidência.
 
-Reaproveita load_logs, translate_dataset e as constantes de estilo
-(BAR_COLOR, EDGE_COLOR, LABEL_FS, AXIS_FS, TITLE_FS) já definidas em
-analysis.py, para manter a mesma paleta/tamanhos usados no resto do
-artigo. Ajuste o caminho do import abaixo conforme o nome real do módulo.
+Reaproveita o carregamento de logs, a tradução de datasets e o estilo
+compartilhados pelo pacote de análise.
 """
 
 import math
@@ -16,10 +14,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 
-from pgm_llm_inference.scripts.analysis.metrics import (
-    load_logs, translate_dataset,
-    BAR_COLOR, EDGE_COLOR, ACCENT_COLOR, ACCENT_EDGE,
-    LABEL_FS, AXIS_FS, TITLE_FS,
+from pgm_llm_inference.analysis.logs import load_logs, translate_dataset
+from pgm_llm_inference.analysis.style import (
+    AXIS_FS,
+    BAR_COLOR,
+    EDGE_COLOR,
+    TITLE_FS,
 )
 
 EXPERIMENT_TAG = "evidence_position"  # deve casar com o usado no script de execução
@@ -136,11 +136,11 @@ def plot_accuracy_by_evidence_position(
     subset["position_bin"] = subset["position_bin"].astype("string")
     subset = subset[subset["position_bin"].isin(valid)]
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig, axes = plt.subplots(1, 1, figsize=(13, 5))
 
     for ax, metric, title, color, edge in [
-        (axes[0], "accuracy", "Acurácia", BAR_COLOR, EDGE_COLOR),
-        (axes[1], "exact_match", "Proporção de Exact Match", ACCENT_COLOR, ACCENT_EDGE),
+        (axes, "accuracy", "Acurácia", BAR_COLOR, EDGE_COLOR),
+        # (axes[1], "exact_match", "Proporção de Exact Match", ACCENT_COLOR, ACCENT_EDGE),
     ]:
         plot_df = subset.dropna(subset=[metric])
         if metric == "accuracy":
@@ -153,27 +153,28 @@ def plot_accuracy_by_evidence_position(
                 capprops=dict(color=edge),
                 flierprops=dict(markerfacecolor=color, markeredgecolor=edge, markersize=5),
             )
-        else:
+
+        # else:
             # Exact match é binário por execução; a média por bin é a
             # proporção de configurações completamente corretas. Um boxplot
             # de zeros e uns seria pouco informativo, por isso usamos barras + IC95%.
-            sns.barplot(
-                data=plot_df, x="position_bin", y=metric, order=valid,
-                color=color, edgecolor=edge, ax=ax,
-                errorbar=("ci", 95), n_boot=2000, seed=42,
-            )
-        count_by_label = {str(k): int(v) for k, v in counts.items()}
-        ax.set_xticks(range(len(valid)))
-        ax.set_xticklabels(
-            [f"{b}\n(n={count_by_label[b]})" for b in valid],
-            fontsize=LABEL_FS,
-        )
+        #     sns.barplot(
+        #         data=plot_df, x="position_bin", y=metric, order=valid,
+        #         color=color, edgecolor=edge, ax=ax,
+        #         errorbar=("ci", 95), n_boot=2000, seed=42,
+        #     )
+        # count_by_label = {str(k): int(v) for k, v in counts.items()}
+        # ax.set_xticks(range(len(valid)))
+        # ax.set_xticklabels(
+        #     [f"{b}\n(n={count_by_label[b]})" for b in valid],
+        #     fontsize=LABEL_FS,
+        # )
         ax.set_xlabel("Posição normalizada da evidência (0=raiz, 1=folha)", fontsize=AXIS_FS)
         ax.set_ylabel(title, fontsize=AXIS_FS)
-        ax.set_ylim(-0.05, 1.05)
+        # ax.set_ylim(-0.05, 1.05)
         ax.set_title(f"{title} vs. Posição da Evidência", fontsize=TITLE_FS, fontweight="bold", pad=10)
-        ax.yaxis.grid(True, linestyle="--", alpha=0.5)
-        ax.set_axisbelow(True)
+        # ax.yaxis.grid(True, linestyle="--", alpha=0.5)
+        # ax.set_axisbelow(True)
 
     plt.tight_layout()
     if save_path is not None:

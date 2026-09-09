@@ -20,10 +20,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Metadados qualitativos de variável (gerados por LLM, usados nos prompts)
 # ---------------------------------------------------------------------------
 
-class DomainScores:
-    """Classe dummy apenas para permitir o carregamento do pickle antigo."""
-    pass
-
 class VariableMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -121,30 +117,6 @@ class BucketResponse(BaseModel):
     decisions: list[ContextDecision] = Field(default_factory=list)
     observed_value: str | None = None
     messages: list[ContextEvidenceMessage] = Field(default_factory=list)
-
-
-class ReconstructionResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    hidden_assignment: dict[str, str]
-    complete_assignment: dict[str, str]
-    explanation: list[str] = Field(default_factory=list)
-
-
-class RepairSuggestion(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    variable: str
-    value: str
-    reason: str | None = None
-
-
-class AuditResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    accept: bool
-    repair: RepairSuggestion | None = None
-    reason: str
 
 
 # ---------------------------------------------------------------------------

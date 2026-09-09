@@ -1,178 +1,298 @@
 # PGM-LLM Inference
 
-Biblioteca em Python para inferência em Redes Bayesianas com estratégias de
-eliminação plugáveis — incluindo uma abordagem de inferência MAP/MPE guiada
-por LLM (raciocínio semântico em vez de eliminação numérica).
+Projeto de pesquisa para comparar inferência exata em Redes Bayesianas com
+uma abordagem semântica baseada em Large Language Models.
 
-## Visão geral
+O projeto possui dois mecanismos distintos:
 
-O núcleo implementa Variable Elimination (VE) com três estratégias
-intercambiáveis (Strategy Pattern):
+- inferência numérica por Variable Elimination, com Sum-Product e Max-Product;
+- inferência LLM-MPE, que compila decisões semânticas uma vez e reutiliza essas
+  decisões para diferentes configurações de evidência.
 
-1. **Sum-Product** — inferência posterior tradicional via marginalização.
-2. **Max-Product** — MAP/MPE exato via otimização numérica.
-3. **LLM Semantic** — MAP/MPE via raciocínio do LLM sobre o significado das
-   variáveis, em vez de operações numéricas em CPTs.
+O entry point do experimento principal é
+`pgm_llm_inference.scripts.run.main`.
 
-Em cima desse núcleo existe uma camada de **experimentos** (`experiment/`)
-que monta datasets reais (`.bif`, `.xdsl`, `.dne`), gera metadados/contexto
-via LLM quando necessário, roda os métodos lado a lado e compara os resultados.
+## Fluxo principal
 
-O pipeline principal de produção da abordagem LLM-MPE vive em `mpe/`: ele
-**compila** as mensagens semânticas uma única vez por dataset (custo: N
-chamadas LLM) e **reutiliza** essa compilação para inferir múltiplas
-evidências (~2 chamadas LLM por evidência).
+```text
+scripts/run/main.py
+        │
+        ├── io.loaders.load_network
+        │       carrega e converte a rede para o modelo interno
+        │
+        ├── mpe.cache.load_or_compile
+        │       ├── reutiliza uma compilação válida; ou
+        │       └── mpe.compile.compile_semantic_messages
+        │               gera metadados, notas e mensagens semânticas
+        │
+        ├── experiment.batch.run_batch
+        │       produz configurações de evidência e consulta
+        │
+        └── experiment.runner.run_experiment
+                ├── Max-Product exato, usado como referência
+                ├── inferência semântica a partir da compilação
+                ├── cálculo das métricas
+                └── persistência do resultado em JSONL
+```
+
+A compilação é a etapa que pode chamar o LLM. Depois que ela está salva, a
+inferência em `mpe.infer` usa apenas lookup e reconstrução determinística por
+backpointers, sem novas chamadas ao modelo.
+
+## Organização
+
+```text
+src/pgm_llm_inference/
+├── models/                 modelos canônicos da rede
+│   ├── variable.py         variável discreta e seus estados
+│   ├── factor.py           tabela multidimensional de probabilidades
+│   └── bayesian_network.py variáveis, fatores e topologia
+│
+├── core/                   operações fundamentais
+│   ├── config.py           configuração de runtime e ambiente
+│   ├── conversion.py       conversão dos formatos externos
+│   ├── factor_ops.py       produto, redução, soma e maximização de fatores
+│   └── ordering.py         heurísticas de ordem de eliminação
+│
+├── inference/              motor numérico de Variable Elimination
+│   ├── engine.py           validação e orquestração da consulta
+│   ├── ve_algorithm.py     algoritmo de eliminação
+│   └── postprocessing.py   normalização e reconstrução numérica
+│
+├── strategies/             operações específicas de cada estratégia
+│   ├── sum_product.py       inferência posterior
+│   ├── max_product.py       MAP/MPE exato
+│   └── llm/                 clientes e parsing de respostas LLM
+│
+├── mpe/                    pipeline semântico LLM-MPE
+│   ├── compile.py           compilação das mensagens semânticas
+│   ├── cache.py             persistência e versionamento da compilação
+│   ├── infer.py             inferência sem novas chamadas LLM
+│   ├── reconstruction.py    reconstrução determinística por backpointers
+│   ├── bucket.py            construção e validação dos buckets
+│   ├── prompt_builders.py   prompts usados durante a compilação
+│   ├── metadata_generation.py
+│   ├── relationship_generation.py
+│   ├── graph.py             operações de grafo
+│   ├── state_semantics.py   interpretação dos estados
+│   ├── client.py            cliente estruturado do LLM
+│   ├── io.py                parsing BIF e normalização semântica
+│   └── types.py             schemas do pipeline
+│
+├── experiment/             execução dos experimentos
+│   ├── config.py            ExperimentConfig e modos MAP/MPE
+│   ├── batch.py             geração do batch
+│   ├── sampling.py          estratégias de amostragem de evidência
+│   ├── runner.py            comparação exata versus semântica
+│   ├── experiment.py        operações de experimento de baixo nível
+│   └── llm_factory.py       seleção entre LLM remoto, local e mock
+│
+├── evaluation/             métricas e benchmarks
+│   ├── metrics.py           accuracy, acertos e comparação de assignments
+│   └── greedy_mpe.py        benchmark MPE exato versus guloso
+│
+├── analysis/               código reutilizável de análise
+│   ├── logs.py              leitura e normalização dos logs
+│   ├── metrics.py           agregações por execução e variável
+│   ├── structure.py         características estruturais das redes
+│   ├── structural_metrics.py
+│   ├── performance_plots.py
+│   ├── structure_plots.py
+│   └── style.py             identidade visual compartilhada
+│
+├── logging/                persistência dos resultados
+├── io/                     carregamento de BIF, XDSL, NET, DSC e DNE
+├── paths.py                caminhos canônicos dos artefatos
+└── scripts/
+    ├── run/                entry points de execução
+    ├── analysis/           entry points de análise
+    └── data_prep/          preparação pontual de datasets
+```
+
+Os módulos em `scripts/` devem apenas configurar e iniciar fluxos. Regras de
+negócio, cálculos e componentes reutilizáveis ficam nos demais pacotes.
 
 ## Instalação
 
-```bash
-uv sync                  # dependências de runtime
-uv sync --extra dev      # + pytest, ruff
-```
-
-Copie `.env.example` para `.env` e ajuste as variáveis (chave de API OpenAI,
-modelo, timeouts, etc.) antes de rodar qualquer fluxo que use LLM real.
-
-## Quick start (uso direto da biblioteca)
-
-```python
-import numpy as np
-from pgm_llm_inference import (
-    Variable, Factor, BayesianNetwork,
-    SumProductStrategy, InferenceEngine,
-)
-
-rain  = Variable(name="Rain",     domain=["yes", "no"])
-grass = Variable(name="GrassWet", domain=["yes", "no"])
-
-network = BayesianNetwork()
-network.add_variable(rain)
-network.add_variable(grass)
-
-p_rain = Factor(scope=[rain], values=np.array([0.2, 0.8]))
-network.add_factor(p_rain)
-
-engine = InferenceEngine(network=network, strategy=SumProductStrategy())
-result = engine.query(query_vars=["Rain"], evidence={"GrassWet": "yes"})
-
-print(result["result_factor"].values)  # P(Rain | GrassWet=yes)
-```
-
-### Usando um LLM real (estratégia LLM Semantic)
-
-```python
-from pgm_llm_inference import LLMSemanticStrategy, InferenceConfig
-from pgm_llm_inference.strategies.llm.openai import create_openai_llm_function
-
-config = InferenceConfig()  # lê variáveis de .env (prefixo PGM_)
-llm_fn = create_openai_llm_function(config)
-strategy = LLMSemanticStrategy(llm_query_fn=llm_fn)
-```
-
-Para um LLM local (servidor compatível com OpenAI, ex. LM Studio/Ollama),
-use `pgm_llm_inference.strategies.llm.local.local_llm_structured` no lugar,
-ou `experiment.llm_factory.build_llm_fn(use_real_llm=False, use_local_llm=True)`
-para deixar a escolha configurável.
-
-## Estrutura do projeto
-
-```
-src/pgm_llm_inference/
-├── models/             Variable, Factor, BayesianNetwork (Pydantic)
-├── core/               config, ordenação de eliminação, operações de fatores,
-│                       conversão de formatos (pgmpy, DNE)
-├── inference/          motor de Variable Elimination (engine, ve_algorithm,
-│                       postprocessing)
-├── strategies/         Sum-Product, Max-Product e LLM Semantic
-│   └── llm/
-│       ├── semantic.py        LLMSemanticStrategy (MAP por variável)
-│       ├── openai.py          cliente LLM via API OpenAI
-│       ├── local.py           cliente LLM via servidor local (streaming)
-│       └── prompts.py         templates de prompt (simple / few-shot / CoT)
-├── mpe/                pipeline LLM-MPE de produção
-│   ├── compile.py             compilação semântica (1× por dataset)
-│   ├── infer.py               inferência sobre evidências usando a compilação
-│   ├── client.py              cliente HTTP para o LLM (httpx, structured output)
-│   ├── prompt_builders.py     prompts de compilação e inferência
-│   ├── graph.py               utilidades de grafo da rede
-│   ├── bucket.py              bucket elimination semântica
-│   ├── state_semantics.py     semântica dos estados das variáveis
-│   ├── reconstruction.py      reconstrução da solução MPE completa
-│   ├── types.py               tipos de dados do pipeline MPE
-│   └── io.py                  leitura e gravação de compilações em disco
-├── experiment/         orquestração de experimentos
-│   ├── compiled_inference.py  compile (1× por dataset) + infer (por evidência)
-│   ├── experiment.py          run_single_map_experiment / run_single_mpe_experiment
-│   ├── runners.py             runner de experimento individual
-│   ├── batch.py               runner de múltiplos datasets/evidências
-│   ├── sampling.py            amostragem de evidências e query vars
-│   ├── llm_factory.py         build_llm_fn (OpenAI / local)
-│   └── metadata.py            carregamento de metadados e relationship-notes
-├── io/                 carregamento de redes (.bif/.bif.gz/.xdsl/.dne)
-├── evaluation/         métricas (acerto LLM vs. MPE exato)
-├── logging/            registro de resultados em JSONL/CSV
-├── utils.py            parsing de saída do LLM (extração de JSON/texto)
-└── scripts/
-    ├── run/            scripts para EXECUTAR experimentos
-    │   ├── main.py             batch completo: múltiplos datasets e evidências
-    │   └── main_single_run.py  exemplo mínimo: 1 dataset, 1 evidência
-    ├── analysis/       scripts para ANALISAR resultados já gerados
-    │   ├── metrics_3.py        gráficos e métricas (rodar após os experimentos)
-    │   ├── reinference.py      segunda passada de verificação via Markov Blanket
-    │   └── get_table.py        estatísticas estruturais dos datasets
-    └── data_prep/      utilitários de preparação de dataset
-        └── change_nodes_name.py
-```
-
-Pastas geradas em tempo de execução (fora do controle de versão — ver
-`.gitignore`): `datasets/`, `metadata/`, `relationships/`, `logs/`, `tables/`.
-
-## Rodando experimentos
+O projeto requer Python 3.12 ou superior e usa `uv` para gerenciamento do
+ambiente.
 
 ```bash
-# Batch completo (múltiplos datasets/evidências)
+uv sync --extra dev
+```
+
+Crie a configuração local:
+
+```bash
+cp .env.example .env
+```
+
+No Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+As configurações são lidas por `InferenceConfig` usando o prefixo `PGM_`.
+As opções mais relevantes são:
+
+```dotenv
+PGM_LOG_FILE_NAME=logs/cbeb_evidence_position.jsonl
+PGM_DEFAULT_ORDERING_HEURISTIC=min_degree
+PGM_LLM_TIMEOUT=2400
+PGM_LLM_MAX_RETRIES=3
+
+PGM_OPENAI_API_KEY=...
+PGM_OPENAI_BASE_URL=https://openrouter.ai/api/v1
+PGM_OPENAI_MODEL=deepseek/deepseek-v4-flash
+
+PGM_LOCAL_URL=http://localhost:11434/v1/chat/completions
+PGM_LOCAL_MODEL=qwen3-coder:30b
+```
+
+Não versione o arquivo `.env` nem credenciais de API.
+
+## Dados e artefatos
+
+Os caminhos são definidos centralmente em `pgm_llm_inference.paths`:
+
+| Conteúdo | Diretório |
+|---|---|
+| Redes Bayesianas | `src/datasets/` |
+| Metadados de variáveis | `src/metadata/` |
+| Notas de relacionamentos | `src/relationships/` |
+| Compilações semânticas | `src/tables/` |
+| Resultados dos experimentos | `logs/` |
+
+O loader numérico aceita `.bif`, `.xdsl`, `.net`, `.dsc` e `.dne`, com ou
+sem compactação `.gz`. O pipeline de compilação semântica trabalha com a
+representação BIF utilizada pelos experimentos principais.
+
+## Cache das compilações
+
+Por padrão, cada dataset usa:
+
+```text
+src/tables/<dataset>.compiled.pkl
+```
+
+O parâmetro `model_name` já percorre o fluxo de cache. Em `mpe/cache.py` há
+um switch comentado para usar nomes de arquivo separados por modelo durante
+os experimentos.
+
+O formato atual possui `COMPILED_SCHEMA_VERSION = 2`. Caches de versões
+anteriores são considerados incompatíveis e fazem `load_or_compile` iniciar
+uma nova compilação. Como essa operação pode consumir créditos do provedor,
+preserve uma cópia dos caches antigos caso ainda precise executá-los com uma
+versão anterior do código.
+
+## Executando experimentos
+
+Antes de executar, ajuste a lista de datasets e o `ExperimentConfig` no entry
+point correspondente.
+
+```bash
+# Batch principal: múltiplos datasets e proporções de evidência
 uv run python -m pgm_llm_inference.scripts.run.main
 
-# Um único dataset/evidência (exemplo mínimo)
+# Uma execução pequena com evidência fixa
 uv run python -m pgm_llm_inference.scripts.run.main_single_run
 
-# Análises pós-hoc (depois de já ter rodado experimentos e gerado logs)
-uv run python -m pgm_llm_inference.scripts.analysis.metrics_3
+# Experimento exaustivo de posição da evidência
+uv run python -m pgm_llm_inference.scripts.run.run_evidence_pos
+
+# Avaliação com rede sintética
+uv run python -m pgm_llm_inference.scripts.run.synthetic_eval
+
+# Benchmark MPE exato versus decodificação gulosa
+uv run python -m pgm_llm_inference.scripts.run.get_mpe
+```
+
+### Modos de evidência
+
+`ExperimentConfig.evidence_sampling` aceita:
+
+- `mpe_consistent`: estados retirados do MPE incondicional;
+- `mpe_inconsistent`: estados deliberadamente diferentes do MPE;
+- `random`: estados amostrados aleatoriamente, sujeitos ao filtro de
+  probabilidade configurado no batch.
+
+### Seleção do LLM
+
+Em `ExperimentConfig`:
+
+| `use_real_llm` | `use_local_llm` | Cliente selecionado |
+|---:|---:|---|
+| `True` | qualquer valor | API configurada em `PGM_OPENAI_*` |
+| `False` | `True` | servidor configurado em `PGM_LOCAL_*` |
+| `False` | `False` | mock local |
+
+## Analisando resultados
+
+As análises consomem os logs JSONL produzidos pelos experimentos:
+
+```bash
+# Métricas agregadas, tabelas, correlações e gráficos
+uv run python -m pgm_llm_inference.scripts.analysis.metrics
+
+# Influência da profundidade do nó usado como evidência
+uv run python -m pgm_llm_inference.scripts.analysis.evidence_position
+
+# Segunda avaliação semântica por Markov Blanket
 uv run python -m pgm_llm_inference.scripts.analysis.reinference
+
+# Estatísticas estruturais e tabela LaTeX dos datasets
 uv run python -m pgm_llm_inference.scripts.analysis.get_table
 ```
 
-## Configuração
+Os switches de gráficos ficam no `main()` de
+`scripts/analysis/metrics.py`. É possível comentar ou descomentar as chamadas
+sem alterar os módulos responsáveis pelos cálculos.
 
-Todas as opções de runtime vêm de `InferenceConfig` (`core/config.py`),
-populada a partir de variáveis de ambiente com prefixo `PGM_` (ver
-`.env.example`): nível de log, epsilon numérico, heurística de ordenação
-de eliminação, timeout/retries do LLM e credenciais da API OpenAI.
+## Uso da inferência numérica
 
-## Desenvolvimento
+```python
+import numpy as np
 
-```bash
-uv run pytest
-uv run ruff check src/
-uv run ruff format src/
+from pgm_llm_inference import (
+    BayesianNetwork,
+    Factor,
+    InferenceEngine,
+    SumProductStrategy,
+    Variable,
+)
+
+rain = Variable(name="Rain", states=("yes", "no"))
+network = BayesianNetwork(
+    variables={"Rain": rain},
+    factors=[Factor(scope=[rain], values=np.array([0.2, 0.8]))],
+)
+
+engine = InferenceEngine(network=network, strategy=SumProductStrategy())
+result = engine.query(query_vars=["Rain"], evidence={})
+
+print(result["result_factor"].values)
 ```
 
-## Arquitetura
+`Variable.states` é a representação canônica do domínio de uma variável. Não
+há um segundo alias para os estados.
 
-A biblioteca usa Strategy Pattern para alternar entre métodos de inferência:
+## Desenvolvimento e validação
 
-- **models/** — tipos de dados imutáveis (Pydantic) para variáveis, fatores
-  e a rede.
-- **core/factor_ops.py** — operações numéricas (einsum, marginalização,
-  maximização) compartilhadas pelas estratégias numéricas.
-- **strategies/** — cada estratégia implementa a interface `EliminationStrategy`
-  (`strategies/base.py`); plugável no `InferenceEngine` sem alterar o motor.
-- **inference/engine.py** — orquestra o algoritmo de Variable Elimination
-  usando a estratégia injetada.
-- **mpe/** — pipeline LLM-MPE de produção com dois estágios separados:
-  - `compile.py` — lê a rede e gera mensagens semânticas via LLM (roda uma
-    vez por dataset, resultado salvo em `tables/*.compiled.pkl`).
-  - `infer.py` — dado um conjunto de evidências e a compilação em cache,
-    resolve o MPE com ~2 chamadas LLM.
-- **experiment/compiled_inference.py** — cola os dois estágios acima e
-  expõe a interface de alto nível usada pelos scripts de experimento.
+```bash
+uv run pytest -q
+uv run ruff check src tests
+uv run python -m compileall -q src tests
+```
+
+A suíte cobre carregamento de caminhos, parsing de respostas LLM, cache,
+inferência compilada, execução dos experimentos e agregações de análise.
+
+Após a refatoração arquitetural, a validação de referência é:
+
+```text
+20 testes aprovados
+Ruff aprovado
+compileall aprovado
+smoke test numérico com asia.bif aprovado
+```

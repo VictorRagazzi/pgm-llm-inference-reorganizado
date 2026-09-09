@@ -39,6 +39,8 @@ from .types import (
 )
 from .graph import topological_order
 
+COMPILED_SCHEMA_VERSION = 2
+
 
 # ---------------------------------------------------------------------------
 # Tipo público
@@ -70,6 +72,7 @@ class CompiledSemanticMessages:
     metadata: dict[str, VariableMetadata]
     relationship_notes: dict[str, tuple[str, ...]]
     traces: list[PromptTrace] = field(default_factory=list)
+    schema_version: int = COMPILED_SCHEMA_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +113,7 @@ def _load_or_generate_relationship_notes(
     llm_fn,
     config: InferenceConfig,
 ) -> dict[str, tuple[str, ...]]:
-    from .metadata_generation import (
+    from .relationship_generation import (
         generate_relationship_notes_with_llm,
         load_relationship_notes,
     )
