@@ -187,16 +187,17 @@ def main():
         # "arctic_sea.bif",
         # "sachs.bif",
 
-        "adhd_cbeb.bif",
-        "covid3_cbeb.bif", # ERRO
-        "covid1_cbeb.bif", # ERRO
-        "gonorrhoeae_cbeb.bif",
-        "hepar2_cbeb.bif",
-        "alarm_cbeb.bif",
-        "foodallergy3_cbeb.bif",
-        "foodallergy1_cbeb.bif",
-        "diabets_cbeb.bif",
-        "child_cbeb.bif",
+        # "adhd_cbeb.bif",
+        # "covid3_cbeb.bif", # ERRO
+        "covid3_TESTE.bif", # ERRO
+        # "covid1_cbeb.bif", # ERRO
+        # "gonorrhoeae_cbeb.bif",
+        # "hepar2_cbeb.bif",
+        # "alarm_cbeb.bif",
+        # "foodallergy3_cbeb.bif",
+        # "foodallergy1_cbeb.bif",
+        # "diabets_cbeb.bif",
+        # "child_cbeb.bif",
         # "urinary_cbeb.bif",
 
         # "cardiovascular_cbeb.bif", # ERRO

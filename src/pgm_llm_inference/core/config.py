@@ -6,7 +6,7 @@ class InferenceConfig(BaseSettings):
     # Logging
     verbose: bool = False
     log_level: str = "INFO"
-    log_file_name: str = "logs/cbeb_local.jsonl"
+    log_file_name: str = "logs/cbeb_evidence_position.jsonl"
 
     # Numerical stability
     epsilon: float = 1e-10

@@ -30,9 +30,15 @@ EDGE_COLOR   = "#1A3F5C"
 ACCENT_COLOR = "#8FB8D9"
 ACCENT_EDGE  = "#4A7A9E"
 GRID_COLOR   = "#CCCCCC"
-LABEL_FS     = 8
-TITLE_FS     = 11
-AXIS_FS      = 9
+# =======================================================
+# PARÂMETROS DE TAMANHO DE FONTE
+# Altere estes valores para ajustar os tamanhos nos plots
+# (ideais para artigos no Overleaf)
+# =======================================================
+LABEL_FS     = 10
+TITLE_FS     = 14
+AXIS_FS      = 12
+# =======================================================
 
 sns.set_theme(style="whitegrid", rc={
     "axes.spines.top":   False,
@@ -341,7 +347,7 @@ def plot_accuracy_by_dataset(
     datasets   = subset["dataset"].unique()
     num_chunks = (len(datasets) + datasets_per_img - 1) // datasets_per_img
 
-    title_suffix = f" — {translate_sampling(evidence_sampling)}" if evidence_sampling else ""
+    # title_suffix = f" — {translate_sampling(evidence_sampling)}" if evidence_sampling else ""
 
     for i in range(num_chunks):
         chunk  = datasets[i * datasets_per_img:(i + 1) * datasets_per_img]
@@ -351,8 +357,8 @@ def plot_accuracy_by_dataset(
 
         fig, ax = plt.subplots(figsize=(12, 5))
         _bar_with_labels(ax, overall, "dataset", "accuracy_pct")
-        ax.set_title(f"Accuracy of the Experiments by Dataset{title_suffix}", fontsize=TITLE_FS, fontweight="bold", pad=10)
-        ax.set_ylabel("Accuracy (%)", fontsize=AXIS_FS)
+        ax.set_title(f"Acurácia dos Experimentos por Dataset", fontsize=TITLE_FS, fontweight="bold", pad=10)
+        ax.set_ylabel("Acurácia (%)", fontsize=AXIS_FS)
         ax.set_xlabel("Dataset", fontsize=AXIS_FS)
         ax.set_ylim(0, 115)
         ax.tick_params(axis="x", rotation=15)
@@ -362,60 +368,54 @@ def plot_accuracy_by_dataset(
 
 def plot_accuracy_by_evidence_ratio(
     grouped: pd.DataFrame,
-    datasets_per_img: int = 5,
     evidence_sampling: Optional[str] = None,
 ):
     """Acurácia média por ratio de evidência, um subplot por dataset.
-
-    Aceita o mesmo filtro `evidence_sampling` de plot_accuracy_by_dataset,
-    pelo mesmo motivo: chamar duas vezes (uma por tipo de amostragem) para
-    comparar mpe_consistent vs mpe_inconsistent.
+    Exibe a evolução usando um gráfico de linha. 
     """
     subset = _filter_by_sampling(grouped, evidence_sampling)
     datasets   = sorted(subset["dataset"].unique())
-    num_chunks = (len(datasets) + datasets_per_img - 1) // datasets_per_img
+    n = len(datasets)
+    ncols = 5
+    nrows = math.ceil(n / ncols) if n > 0 else 1
 
     suptitle_suffix = f" — {translate_sampling(evidence_sampling)}" if evidence_sampling else ""
 
-    for i in range(num_chunks):
-        chunk = datasets[i * datasets_per_img:(i + 1) * datasets_per_img]
-        n     = len(chunk)
-        ncols = min(n, 2)
-        nrows = math.ceil(n / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 4 * nrows), sharey=True, squeeze=False)
 
-        fig, axes = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 4 * nrows), sharey=True, squeeze=False)
+    for j, ds in enumerate(datasets):
+        ax = axes[j // ncols][j % ncols]
+        ds_data = subset[subset["dataset"] == ds]
+        ds_agg = (
+            ds_data.groupby("evidence_ratio")["accuracy"]
+            .mean().mul(100).reset_index().sort_values("evidence_ratio")
+        )
+        ratios = ds_agg["evidence_ratio"].tolist()
+        values = ds_agg["accuracy"].tolist()
 
-        for j, ds in enumerate(chunk):
-            ax = axes[j // ncols][j % ncols]
-            ds_data = subset[subset["dataset"] == ds]
-            ds_agg = (
-                ds_data.groupby("evidence_ratio")["accuracy"]
-                .mean().mul(100).reset_index().sort_values("evidence_ratio")
-            )
-            ratios = ds_agg["evidence_ratio"].astype(str).tolist()
-            values = ds_agg["accuracy"].tolist()
-            x_pos  = range(len(ratios))
+        # Plota usando o valor numérico da razão de evidência no eixo X
+        ax.plot(ratios, values, color=BAR_COLOR, marker='o', linewidth=2, markersize=8, zorder=3)
+        
+        ax.set_title(translate_dataset(ds), fontsize=TITLE_FS, fontweight="bold", pad=2)
+        
+        # Configuração do eixo X para ser igual em todos (5 a 50)
+        ticks = list(range(5, 55, 5))
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{t}" for t in ticks], fontsize=LABEL_FS)
+        ax.set_xlim(0, 55)
+        
+        ax.set_ylim(0, 115)
+        ax.yaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
 
-            bars = ax.bar(x_pos, values, color=BAR_COLOR, edgecolor=EDGE_COLOR, linewidth=0.6, width=0.6, zorder=3)
-            for bar, val in zip(bars, values):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5, f"{val:.1f}%",
-                        ha="center", va="bottom", fontsize=7, color="#222222")
+    for k in range(n, nrows * ncols):
+        axes[k // ncols][k % ncols].set_visible(False)
 
-            ax.set_title(translate_dataset(ds), fontsize=TITLE_FS, fontweight="bold", pad=6)
-            ax.set_xticks(list(x_pos))
-            ax.set_xticklabels(ratios, fontsize=LABEL_FS)
-            if j % ncols == 0:
-                ax.set_ylabel("Mean Accuracy (%)", fontsize=AXIS_FS)
-            ax.set_ylim(0, 115)
-            ax.yaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
-            ax.set_axisbelow(True)
-
-        for k in range(len(chunk), nrows * ncols):
-            axes[k // ncols][k % ncols].set_visible(False)
-
-        fig.suptitle(f"Mean Accuracy by Evidence Ratio per Dataset{suptitle_suffix}", fontsize=TITLE_FS + 1, fontweight="bold", y=1.02)
-        plt.tight_layout()
-        plt.show()
+    fig.supxlabel("Proporção de Evidência (%)", fontsize=AXIS_FS, fontweight="bold")
+    fig.supylabel("Acurácia Média (%)", fontsize=AXIS_FS, fontweight="bold")
+    
+    fig.suptitle(f"Acurácia Média x Proporção de Evidência ", fontsize=TITLE_FS + 2, fontweight="bold", y=0.96)
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_accuracy_by_sampling(grouped: pd.DataFrame):
@@ -435,14 +435,14 @@ def plot_accuracy_by_sampling(grouped: pd.DataFrame):
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 
     _bar_with_labels(axes[0], agg, "sampling_label", "accuracy")
-    axes[0].set_title("Per-Variable Accuracy by Evidence Sampling", fontsize=TITLE_FS, fontweight="bold")
-    axes[0].set_ylabel("Accuracy (%)", fontsize=AXIS_FS)
+    axes[0].set_title("Acurácia por Variável por Amostragem de Evidência", fontsize=TITLE_FS, fontweight="bold")
+    axes[0].set_ylabel("Acurácia (%)", fontsize=AXIS_FS)
     axes[0].set_xlabel("")
     axes[0].set_ylim(0, 115)
 
     _bar_with_labels(axes[1], agg, "sampling_label", "joint_match")
-    axes[1].set_title("Full-MPE Match Rate by Evidence Sampling", fontsize=TITLE_FS, fontweight="bold")
-    axes[1].set_ylabel("Joint Match Rate (%)", fontsize=AXIS_FS)
+    axes[1].set_title("Taxa de Acerto Conjunto do MPE Completo por Amostragem", fontsize=TITLE_FS, fontweight="bold")
+    axes[1].set_ylabel("Taxa de Acerto Conjunto (%)", fontsize=AXIS_FS)
     axes[1].set_xlabel("")
     axes[1].set_ylim(0, 115)
 
@@ -538,8 +538,8 @@ def plot_joint_match_by_dataset(
 
         fig, ax = plt.subplots(figsize=(12, 5))
         _bar_with_labels(ax, overall, "dataset", "joint_match_pct")
-        ax.set_title(f"Full-MPE Exact Match Rate by Dataset{title_suffix}", fontsize=TITLE_FS, fontweight="bold", pad=10)
-        ax.set_ylabel("Joint Match Rate (%)", fontsize=AXIS_FS)
+        ax.set_title(f"Taxa de Acerto Exato do MPE Completo por Dataset{title_suffix}", fontsize=TITLE_FS, fontweight="bold", pad=10)
+        ax.set_ylabel("Taxa de Acerto Conjunto (%)", fontsize=AXIS_FS)
         ax.set_xlabel("Dataset", fontsize=AXIS_FS)
         ax.set_ylim(0, 115)
         ax.tick_params(axis="x", rotation=15)
@@ -562,9 +562,9 @@ def plot_accuracy_vs_joint_match(grouped: pd.DataFrame):
     ax.plot([0, 1], [0, 1], linestyle="--", color=GRID_COLOR, linewidth=1, zorder=0)
     ax.set_xlim(-0.05, 1.05)
     ax.set_ylim(-0.05, 1.05)
-    ax.set_xlabel("Per-Variable Accuracy", fontsize=AXIS_FS)
-    ax.set_ylabel("Full-MPE Joint Match", fontsize=AXIS_FS)
-    ax.set_title("Per-Variable Accuracy vs. Full-MPE Recovery", fontsize=TITLE_FS, fontweight="bold")
+    ax.set_xlabel("Acurácia por Variável", fontsize=AXIS_FS)
+    ax.set_ylabel("Acerto Conjunto do MPE Completo", fontsize=AXIS_FS)
+    ax.set_title("Acurácia por Variável vs. Recuperação do MPE Completo", fontsize=TITLE_FS, fontweight="bold")
     plt.tight_layout()
     plt.show()
 
@@ -583,9 +583,9 @@ def plot_accuracy_vs_joint_match(grouped: pd.DataFrame):
 # métrica de "ambiguidade semântica" ficaram de fora por decisão de projeto
 # (a primeira não é variada nos experimentos; a segunda não tem uma forma
 # confiável de cálculo disponível no momento).
-STRUCTURAL_COLUMNS = ["nodes", "edges", "max_degree", "depth"]
+STRUCTURAL_COLUMNS = ["nodes", "edges", "max_degree", "depth",
+                      "mean_cardinality", "max_cardinality"]   # [NOVO]
 
-# Métricas de erro do método já calculadas em compute_grouped_table.
 ERROR_COLUMNS = ["accuracy", "joint_match", "exact_match"]
 
 
@@ -700,6 +700,12 @@ def plot_error_vs_structure(merged: pd.DataFrame, error_metric: str = "accuracy"
     por métrica estrutural — inclui rho/p de Spearman no título de cada
     subplot.
     """
+    error_metric_pt = {
+        "accuracy": "Acurácia",
+        "joint_match": "Acerto Conjunto",
+        "exact_match": "Acerto Exato"
+    }.get(error_metric, error_metric)
+
     fig, axes = plt.subplots(1, len(STRUCTURAL_COLUMNS), figsize=(5 * len(STRUCTURAL_COLUMNS), 4.5), sharey=True)
 
     for ax, struct_col in zip(axes, STRUCTURAL_COLUMNS):
@@ -718,8 +724,8 @@ def plot_error_vs_structure(merged: pd.DataFrame, error_metric: str = "accuracy"
         ax.set_axisbelow(True)
         ax.tick_params(axis="both", labelsize=LABEL_FS)
 
-    axes[0].set_ylabel(error_metric, fontsize=AXIS_FS)
-    fig.suptitle(f"{error_metric} vs. Características Estruturais da Rede", fontsize=TITLE_FS + 1, fontweight="bold", y=1.02)
+    axes[0].set_ylabel(error_metric_pt, fontsize=AXIS_FS)
+    fig.suptitle(f"{error_metric_pt} vs. Características Estruturais da Rede", fontsize=TITLE_FS + 1, fontweight="bold", y=1.02)
     plt.tight_layout()
     plt.show()
 
@@ -733,6 +739,9 @@ def plot_error_vs_structure(merged: pd.DataFrame, error_metric: str = "accuracy"
 #  específica. Resolve a crítica de baixo poder estatístico sem precisar
 #  rodar mais redes. Requer get_variable_structure_table (get_table.py).
 # ─────────────────────────────────────────────
+
+VARIABLE_STRUCTURAL_COLUMNS = ["n_parents", "cardinality"]    # [NOVO]
+
 
 def build_variable_level_table(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -753,14 +762,8 @@ def build_variable_structural_merge(
     evidence_sampling: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Agrega variable_table por (dataset, variable) — taxa média de acerto
-    daquela variável ao longo de todos os experimentos em que foi avaliada
-    — e faz merge com o número de pais de cada variável, vindo de
-    get_variable_structure_table(datasets).
-
-    `evidence_sampling`: filtra por tipo de amostragem antes de agregar
-    (ex.: "mpe_inconsistent", que é o cenário clinicamente mais realista).
-    None mantém os dois tipos juntos.
+    [MODIFICADO] Agora também traz 'cardinality' por variável além de
+    'n_parents'.  O resto do comportamento é idêntico à versão original.
     """
     subset = _filter_by_sampling(variable_table, evidence_sampling)
 
@@ -775,20 +778,166 @@ def build_variable_structural_merge(
     struct_df = pd.DataFrame(variable_structure_table)
     struct_df["dataset_norm"] = struct_df["dataset"].apply(_normalize_dataset_name)
 
+    # [NOVO] cardinality adicionado às colunas puxadas do struct_df.
+    # Se get_variable_structure_table ainda não retornar a coluna, o merge
+    # vai falhar aqui com KeyError — melhor falhar cedo do que silenciosamente.
+    var_struct_cols = ["dataset_norm", "variable"] + VARIABLE_STRUCTURAL_COLUMNS
+    available_cols = [c for c in var_struct_cols if c in struct_df.columns]
+
     merged = per_var.merge(
-        struct_df[["dataset_norm", "variable", "n_parents"]],
+        struct_df[available_cols],
         on=["dataset_norm", "variable"],
         how="inner",
     )
+
+    # [NOVO] Avisa se cardinality não veio da tabela estrutural, para o
+    # usuário saber que precisa atualizar get_variable_structure_table.
+    for col in VARIABLE_STRUCTURAL_COLUMNS:
+        if col not in merged.columns:
+            print(f"[AVISO] Coluna '{col}' ausente em variable_structure_table — "
+                  f"adicione o cálculo em get_variable_structure_table().")
 
     logged = set(zip(per_var["dataset_norm"], per_var["variable"]))
     matched = set(zip(merged["dataset_norm"], merged["variable"]))
     missing = logged - matched
     if missing:
-        print(f"[AVISO] {len(missing)} variável(is) dos logs não encontradas na tabela estrutural (dataset, variável): {sorted(missing)[:10]}{' ...' if len(missing) > 10 else ''}")
+        n = len(missing)
+        sample = sorted(missing)[:10]
+        print(f"[AVISO] {n} variável(is) dos logs não encontradas na tabela "
+              f"estrutural: {sample}{' ...' if n > 10 else ''}")
 
     return merged.drop(columns=["dataset_norm"])
 
+def compute_variable_structural_correlations(
+    merged: pd.DataFrame,
+    evidence_sampling: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    [NOVO] Spearman entre accuracy por variável e cada métrica estrutural
+    de nível de variável presente em VARIABLE_STRUCTURAL_COLUMNS
+    (n_parents e cardinality).
+
+    Análogo a compute_structural_correlations, mas operando sobre a
+    granularidade de nó, onde n é muito maior do que o número de redes.
+    """
+    records = []
+    for col in VARIABLE_STRUCTURAL_COLUMNS:
+        if col not in merged.columns:
+            continue
+        sub = merged[["accuracy", col]].dropna()
+        if len(sub) < 3:
+            rho, pval = float("nan"), float("nan")
+        else:
+            rho, pval = spearmanr(sub["accuracy"], sub[col])
+        records.append({
+            "structural_metric": col,
+            "n":                 len(sub),
+            "rho":               rho,
+            "p_value":           pval,
+        })
+    return pd.DataFrame(records)
+
+def print_variable_structural_correlations(
+    corr_df: pd.DataFrame,
+    evidence_sampling: Optional[str] = None,
+):
+    """[NOVO] Tabela de Spearman accuracy × métricas estruturais por variável."""
+    label = (f" ({translate_sampling(evidence_sampling)})"
+             if evidence_sampling else " (todos os tipos de evidência)")
+    W = 60
+    print("=" * W)
+    print(f"{'ACURÁCIA POR VARIÁVEL × ESTRUTURA' + label:^{W}}")
+    print("=" * W)
+    print(f"{'Métrica estrutural':<20} {'n':>5} {'rho':>9} {'p-valor':>10}")
+    print("-" * W)
+    for _, row in corr_df.iterrows():
+        if math.isnan(row["p_value"]):
+            rho_str, p_str, sig = "   N/A", "      N/A", ""
+        else:
+            rho_str = f"{row['rho']:>9.3f}"
+            p_str   = f"{row['p_value']:>10.3f}"
+            sig     = " *" if row["p_value"] < 0.05 else ""
+        print(f"{row['structural_metric']:<20} {row['n']:>5} {rho_str} {p_str}{sig}")
+    print("-" * W)
+    print("* p < 0.05  |  n < 3 -> N/A")
+    print("=" * W)
+    print()
+
+def plot_accuracy_by_cardinality(
+    merged: pd.DataFrame,
+    min_n: int = 4,
+    show_outliers: bool = False,
+):
+    """
+    [NOVO] Boxplot de accuracy por cardinalidade da variável (número de
+    estados possíveis).  Espelho direto de plot_accuracy_by_n_parents —
+    mesma lógica de filtragem por min_n e mesma paleta.
+
+    Requer que 'cardinality' esteja em `merged`; se não estiver (porque
+    get_variable_structure_table ainda não a retorna), imprime um aviso e
+    retorna sem plotar.
+    """
+    if "cardinality" not in merged.columns:
+        print("[AVISO] plot_accuracy_by_cardinality: coluna 'cardinality' "
+              "ausente — adicione o cálculo em get_variable_structure_table().")
+        return
+
+    counts = merged["cardinality"].value_counts()
+    valid   = sorted(c for c, n in counts.items() if n >= min_n)
+    dropped = sorted(c for c, n in counts.items() if n < min_n)
+
+    if not valid:
+        print("[AVISO] plot_accuracy_by_cardinality: nenhuma categoria com "
+              f"n ≥ {min_n}. Reduza min_n ou verifique os dados.")
+        return
+
+    subset = merged[merged["cardinality"].isin(valid)]
+
+    rho_result = compute_variable_structural_correlations(
+        merged[["accuracy", "cardinality"]].rename(
+            columns={"cardinality": "cardinality"}   # mantém nome
+        ).assign(n_parents=merged.get("n_parents"))  # evita erro se n_parents ausente
+        if "n_parents" not in merged.columns
+        else merged
+    )
+    # Recupera só a linha de cardinality para o subtítulo
+    rho_row = (
+        rho_result[rho_result["structural_metric"] == "cardinality"]
+        .iloc[0] if not rho_result.empty else None
+    )
+    rho_label = ""
+    if rho_row is not None and not math.isnan(rho_row["p_value"]):
+        sig = " *" if rho_row["p_value"] < 0.05 else ""
+        rho_label = f"  (ρ={rho_row['rho']:.3f}, p={rho_row['p_value']:.3f}{sig})"
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    sns.boxplot(
+        data=subset, x="cardinality", y="accuracy", order=valid,
+        color=BAR_COLOR, ax=ax, showfliers=show_outliers,
+        boxprops=dict(edgecolor=EDGE_COLOR),
+        medianprops=dict(color=EDGE_COLOR, linewidth=1.5),
+        whiskerprops=dict(color=EDGE_COLOR),
+        capprops=dict(color=EDGE_COLOR),
+        flierprops=dict(markerfacecolor=ACCENT_COLOR,
+                        markeredgecolor=ACCENT_EDGE, markersize=5),
+    )
+
+    ax.set_xticklabels(
+        [f"{c}\n(n={counts.get(c, 0)})" for c in valid],
+        fontsize=LABEL_FS,
+    )
+    ax.set_xlabel("Cardinalidade da variável (nº de estados)", fontsize=AXIS_FS)
+    ax.set_ylabel("Acurácia por variável", fontsize=AXIS_FS)
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_title(
+        f"Acurácia por Variável vs. Cardinalidade{rho_label}",
+        fontsize=TITLE_FS, fontweight="bold", pad=10,
+    )
+    ax.yaxis.grid(True, linestyle="--", alpha=0.5)
+    ax.set_axisbelow(True)
+
+    plt.tight_layout()
+    plt.show()
 
 def compute_parents_correlation(merged: pd.DataFrame) -> dict:
     """
@@ -818,36 +967,56 @@ def print_parents_correlation(result: dict, evidence_sampling: Optional[str] = N
     print()
 
 
-def plot_accuracy_by_n_parents(merged: pd.DataFrame):
+def plot_accuracy_by_n_parents(merged: pd.DataFrame, min_n: int = 4, show_outliers: bool = False):
     """
     Boxplot de accuracy por nº de pais (variável discreta e geralmente com
     poucos valores distintos — 0, 1, 2, 3... — então boxplot por categoria
     é mais legível que um scatter puro). Mesma paleta do resto do paper.
+ 
+    `min_n`: categorias de n_parents com menos observações que isso são
+    descartadas do gráfico (default 4). Com n=1 o "boxplot" é uma única
+    observação virando uma linha reta, e com n=3 é uma caixa de 3 pontos —
+    nenhum dos dois representa uma distribuição de verdade, então melhor
+    omitir e declarar isso (a nota abaixo do gráfico) do que sugerir uma
+    variância que os dados não sustentam.
+ 
+    `show_outliers`: desenha ou não os pontos individuais fora do whisker.
+    False por default — com os whiskers das categorias mais numerosas já
+    descendo perto de 0, os pontos extras acrescentam pouca informação
+    nova e poluem o gráfico.
     """
+    counts = merged["n_parents"].value_counts()
+    valid   = sorted(n for n, c in counts.items() if c >= min_n)
+    dropped = sorted(n for n, c in counts.items() if c < min_n)
+ 
+    subset = merged[merged["n_parents"].isin(valid)]
+ 
     fig, ax = plt.subplots(figsize=(7, 5))
-    order = sorted(merged["n_parents"].unique())
-
     sns.boxplot(
-        data=merged, x="n_parents", y="accuracy", order=order,
-        color=BAR_COLOR, ax=ax,
+        data=subset, x="n_parents", y="accuracy", order=valid,
+        color=BAR_COLOR, ax=ax, showfliers=show_outliers,
         boxprops=dict(edgecolor=EDGE_COLOR),
         medianprops=dict(color=EDGE_COLOR, linewidth=1.5),
         whiskerprops=dict(color=EDGE_COLOR),
         capprops=dict(color=EDGE_COLOR),
         flierprops=dict(markerfacecolor=ACCENT_COLOR, markeredgecolor=ACCENT_EDGE, markersize=5),
     )
-
-    n_per_group = merged.groupby("n_parents").size()
-    ax.set_xticklabels([f"{p}\n(n={n_per_group.get(p, 0)})" for p in order], fontsize=LABEL_FS)
+ 
+    ax.set_xticklabels([f"{p}\n(n={counts.get(p, 0)})" for p in valid], fontsize=LABEL_FS)
     ax.set_xlabel("Número de pais da variável", fontsize=AXIS_FS)
     ax.set_ylabel("Acurácia por variável", fontsize=AXIS_FS)
     ax.set_ylim(-0.05, 1.05)
     ax.set_title("Acurácia por Variável vs. Número de Pais", fontsize=TITLE_FS, fontweight="bold", pad=10)
     ax.yaxis.grid(True, linestyle="--", alpha=0.5)
     ax.set_axisbelow(True)
-
+ 
+    # if dropped:
+    #     note = f"Categorias com n < {min_n} omitidas: " + ", ".join(f"{d} pais (n={counts[d]})" for d in dropped)
+    #     ax.text(0.5, -0.16, note, transform=ax.transAxes, ha="center", fontsize=LABEL_FS - 1, color="#555555")
+ 
     plt.tight_layout()
     plt.show()
+ 
 
 
 # ─────────────────────────────────────────────
@@ -910,26 +1079,6 @@ def print_results_table(grouped: pd.DataFrame, evidence_length: Optional[int] = 
     print()
 
 
-def print_sampling_summary(grouped: pd.DataFrame):
-    """Resumo agregado só por (evidence_sampling, evidence_layout), cruzando datasets."""
-    W = 70
-    print("=" * W)
-    print(f"{'RESUMO POR TIPO DE AMOSTRAGEM DE EVIDÊNCIA':^{W}}")
-    print("=" * W)
-    print(f"{'Sampling':<15} {'Layout':<12} {'Acc':>7} {'Joint':>7} {'Consenso':>9}")
-    print("-" * W)
-    for keys, rows in grouped.groupby(["evidence_sampling", "evidence_layout"]):
-        sampling, layout = keys
-        print(
-            f"{sampling:<15} {layout:<12} "
-            f"{rows['accuracy'].mean()*100:>6.1f}% "
-            f"{rows['joint_match'].mean()*100:>6.1f}% "
-            f"{rows['consensus'].mean()*100:>8.1f}%"
-        )
-    print("=" * W)
-    print()
-
-
 # ─────────────────────────────────────────────
 #  ENTRY POINT
 # ─────────────────────────────────────────────
@@ -940,7 +1089,7 @@ if __name__ == "__main__":
     grouped = compute_grouped_table(df)
 
     # plot_accuracy_by_dataset(grouped, datasets_per_img=11)
-    # plot_accuracy_by_evidence_ratio(grouped, datasets_per_img=5)
+    plot_accuracy_by_evidence_ratio(grouped, evidence_sampling="mpe_consistent")
     # plot_accuracy_by_sampling(grouped)
     # plot_joint_match_by_dataset(grouped, datasets_per_img=9)
     # plot_accuracy_vs_joint_match(grouped)
@@ -957,7 +1106,6 @@ if __name__ == "__main__":
     # Gráfico único comparando accuracy e joint_match entre os dois tipos:
     plot_sampling_comparison(grouped)
 
-    print_sampling_summary(grouped)
     print_results_table(grouped, evidence_length=1)
     print_results_table(grouped)  # todas as evidence_length juntas
 
@@ -965,8 +1113,6 @@ if __name__ == "__main__":
     from pgm_llm_inference.scripts.analysis.get_table import get_structure_table, get_variable_structure_table
     structure_table = get_structure_table(df["dataset"].unique().tolist())
     merged = build_structural_merge(grouped, structure_table)
-    corr_df = compute_structural_correlations(merged)
-    print_structural_correlation_table(corr_df)
     plot_error_vs_structure(merged, error_metric="accuracy")
     plot_error_vs_structure(merged, error_metric="joint_match")
 
@@ -980,11 +1126,12 @@ if __name__ == "__main__":
     var_merged = build_variable_structural_merge(variable_table, variable_structure_table)
     parents_corr = compute_parents_correlation(var_merged)
     print_parents_correlation(parents_corr)
-    plot_accuracy_by_n_parents(var_merged)
 
-    # Só evidência mpe_inconsistent (cenário clinicamente mais realista):
-    # var_merged_inc = build_variable_structural_merge(
-    #     variable_table, variable_structure_table, evidence_sampling="mpe_inconsistent"
-    # )
-    # print_parents_correlation(compute_parents_correlation(var_merged_inc), evidence_sampling="mpe_inconsistent")
-    # plot_accuracy_by_n_parents(var_merged_inc)
+
+    # Correlações unificadas (n_parents + cardinality numa tabela só)
+    corr_var = compute_variable_structural_correlations(var_merged)
+    print_variable_structural_correlations(corr_var)
+
+    # Plots individuais
+    plot_accuracy_by_n_parents(var_merged)
+    plot_accuracy_by_cardinality(var_merged)        # [NOVO]
