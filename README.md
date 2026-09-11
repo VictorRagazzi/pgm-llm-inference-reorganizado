@@ -208,6 +208,22 @@ uv run python -m pgm_llm_inference.scripts.run.synthetic_eval
 uv run python -m pgm_llm_inference.scripts.run.get_mpe
 ```
 
+## Demonstração sem CPTs
+
+O exemplo mais direto de aplicação não precisa de arquivo BIF nem de tabelas
+de probabilidade. Ele declara em Python os estados de cada variável, as arestas
+no formato `pai -> filhos` e as evidências observadas:
+
+```bash
+uv run python -m pgm_llm_inference.scripts.run.cptless_demo
+```
+
+Para criar outra aplicação, edite apenas `VARIABLE_STATES`, `CHILDREN` e
+`EVIDENCE` em `scripts/run/cptless_demo.py`. O modelo gera o contexto semântico,
+compila as decisões e imprime uma tabela com o assignment completo. Como não
+existem CPTs, o resultado é um MPE semântico aproximado e não pode ser tratado
+como um MPE numérico exato.
+
 ### Modos de evidência
 
 `ExperimentConfig.evidence_sampling` aceita:

@@ -80,15 +80,17 @@ class CompiledSemanticMessages:
 # ---------------------------------------------------------------------------
 
 def _load_or_generate_metadata(
-    network,
-    bif_path: Path,
+    network: BayesianNetwork,
+    bif_path: Path | None,
     metadata_path: Path | None,
     llm_fn,
     config: InferenceConfig,
 ) -> tuple[BayesianNetwork, dict[str, VariableMetadata]]:
     from .metadata_generation import generate_metadata_with_llm
 
-    bn = parse_bif(bif_path)
+    # Dataset experiments may keep using the lightweight BIF parser. Small
+    # applications can provide an in-memory CPT-less network directly.
+    bn = parse_bif(bif_path) if bif_path is not None else network
 
     if config.show_input_data:
         print("\n[COMPILE] Carregando metadados da rede...")
@@ -96,9 +98,18 @@ def _load_or_generate_metadata(
     if metadata_path is None or not metadata_path.exists():
         if config.show_input_data:
             print("  → Gerando metadados via LLM (arquivo não encontrado)...")
-        generate_metadata_with_llm(bn=network, llm_fn=llm_fn, output_path=metadata_path)
-
-    metadata = load_metadata(metadata_path, bn)
+        generated = generate_metadata_with_llm(
+            bn=bn,
+            llm_fn=llm_fn,
+            output_path=metadata_path,
+        )
+        metadata = {}
+        for variable, raw_metadata in generated.items():
+            if variable not in bn.variables:
+                raise ValueError(f"Metadata references unknown variable {variable}.")
+            metadata[variable] = VariableMetadata.model_validate(raw_metadata)
+    else:
+        metadata = load_metadata(metadata_path, bn)
 
     if config.show_input_data:
         print(f"  ✓ Metadados carregados: {len(metadata)} entradas")
@@ -107,7 +118,7 @@ def _load_or_generate_metadata(
 
 
 def _load_or_generate_relationship_notes(
-    network,
+    network: BayesianNetwork,
     relationship_path: Path | None,
     bn: BayesianNetwork,
     llm_fn,
@@ -124,11 +135,18 @@ def _load_or_generate_relationship_notes(
     if relationship_path is None or not relationship_path.exists():
         if config.show_input_data:
             print("  → Gerando relationship notes via LLM (arquivo não encontrado)...")
-        generate_relationship_notes_with_llm(
-            bn=network, llm_fn=llm_fn, output_path=relationship_path
+        generated = generate_relationship_notes_with_llm(
+            bn=bn, llm_fn=llm_fn, output_path=relationship_path
         )
-
-    relationship_notes = load_relationship_notes(relationship_path, bn)
+        relationship_notes = {}
+        for variable, notes in generated.items():
+            if variable not in bn.variables:
+                raise ValueError(
+                    f"Relationship notes references unknown variable '{variable}'."
+                )
+            relationship_notes[variable] = tuple(notes)
+    else:
+        relationship_notes = load_relationship_notes(relationship_path, bn)
 
     if config.show_input_data:
         print(
@@ -145,8 +163,8 @@ def _load_or_generate_relationship_notes(
 
 def compile_semantic_messages(
     *,
-    network,
-    bif_path: Path,
+    network: BayesianNetwork,
+    bif_path: Path | None = None,
     metadata_path: Path | None = None,
     relationship_path: Path | None = None,
     llm_fn,
@@ -162,9 +180,10 @@ def compile_semantic_messages(
 
     Parâmetros
     ----------
-    network           : objeto de rede do pgm_llm_inference (para geração de
-                        metadados, caso necessário).
-    bif_path          : caminho para o arquivo .bif do dataset.
+    network           : objeto de rede do pgm_llm_inference. Pode conter apenas
+                        variáveis e topologia, sem CPTs.
+    bif_path          : caminho opcional para o arquivo .bif. Quando omitido,
+                        ``network`` é usado diretamente.
     metadata_path     : caminho para o .json de metadados (gerado se ausente).
     relationship_path : caminho para o .json de notas (gerado se ausente).
     llm_fn            : callable(prompt, response_model) → model.

@@ -73,6 +73,7 @@ def plot_accuracy_by_dataset(
 def plot_accuracy_by_evidence_ratio(
     grouped: pd.DataFrame,
     evidence_sampling: str | None = None,
+    joint_match_column: str = "joint_match",
 ) -> None:
     subset = filter_by_sampling(grouped, evidence_sampling)
     datasets = sorted(subset["dataset"].unique())
@@ -86,11 +87,15 @@ def plot_accuracy_by_evidence_ratio(
         squeeze=False,
     )
 
+    has_joint_match = joint_match_column in subset.columns
+
     for index, dataset in enumerate(datasets):
         axis = axes[index // columns][index % columns]
+        by_dataset = subset[subset["dataset"] == dataset]
+
+        agg_columns = ["accuracy"] + ([joint_match_column] if has_joint_match else [])
         values = (
-            subset[subset["dataset"] == dataset]
-            .groupby("evidence_ratio")["accuracy"]
+            by_dataset.groupby("evidence_ratio")[agg_columns]
             .mean()
             .mul(100)
             .reset_index()
@@ -101,10 +106,24 @@ def plot_accuracy_by_evidence_ratio(
             values["accuracy"],
             color=BAR_COLOR,
             marker="o",
-            linewidth=2,
-            markersize=8,
+            linewidth=1.3,
+            markersize=5,
+            alpha=0.85,
             zorder=3,
+            label="Acurácia por variável",
         )
+        if has_joint_match:
+            axis.plot(
+                values["evidence_ratio"],
+                values[joint_match_column],
+                color=ACCENT_COLOR,
+                marker="s",
+                linewidth=0.75,
+                markersize=2,
+                alpha=0.85,
+                zorder=3,
+                label="Exact match",
+            )
         axis.set_title(
             translate_dataset(dataset), fontsize=TITLE_FS, fontweight="bold", pad=2
         )
@@ -115,17 +134,30 @@ def plot_accuracy_by_evidence_ratio(
 
     for index in range(len(datasets), rows * columns):
         axes[index // columns][index % columns].set_visible(False)
+
+    if has_joint_match:
+        handles, labels = axes[0][0].get_legend_handles_labels()
+        figure.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.85, 0.96),
+            ncol=2,
+            fontsize=LABEL_FS,
+            frameon=False,
+            # bbox_to_anchor=(0.5, -0.02),
+        )
+
     figure.supxlabel("Proporção de Evidência (%)", fontsize=AXIS_FS, fontweight="bold")
-    figure.supylabel("Acurácia Média (%)", fontsize=AXIS_FS, fontweight="bold")
+    figure.supylabel("Média (%)", fontsize=AXIS_FS, fontweight="bold")
     figure.suptitle(
-        "Acurácia Média x Proporção de Evidência",
+        "Acurácia e Exact Match x Proporção de Evidência",
         fontsize=TITLE_FS + 2,
         fontweight="bold",
         y=0.96,
     )
-    plt.tight_layout()
+    plt.tight_layout()  # reserva mais espaço à direita
     plt.show()
-
 
 def plot_accuracy_by_sampling(grouped: pd.DataFrame) -> None:
     data = grouped.copy()
