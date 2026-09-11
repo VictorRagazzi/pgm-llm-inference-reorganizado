@@ -1,6 +1,5 @@
 import numpy as np
 from typing import Dict, Tuple
-from pgm_llm_inference.models import Factor
 
 def count_llm_hits(
     result,
@@ -59,7 +58,7 @@ def count_llm_hits(
             raise ValueError(f"Variable '{target}' not found in result.scope")
 
         var = scope[var_index]
-        domain = var.domain
+        domain = var.states
 
         # Marginalize all but this variable
         if values.ndim == 0:

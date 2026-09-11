@@ -33,7 +33,7 @@ def postprocess_result(
         )
 
         assignment = {
-            var.name: var.domain[max_idx[i]]
+            var.name: var.states[max_idx[i]]
             for i, var in enumerate(final_factor.scope)
         }
 

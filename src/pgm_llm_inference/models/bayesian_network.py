@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
+
 from pydantic import BaseModel, Field, model_validator
 
 from .variable import Variable
@@ -19,7 +21,7 @@ class BayesianNetwork(BaseModel):
 
     2. Pipeline MPE (via mpe/io.py → parse_bif):
        - `factors` vazio (sem CPTs numéricas).
-       - `parents` fornecido explicitamente via `_parents`.
+       - `explicit_parents` fornecido pelo parser.
        - `name` preenchido com o nome da rede do arquivo .bif.
 
     A property `parents` resolve isso: retorna `_parents` se fornecido,
@@ -29,24 +31,12 @@ class BayesianNetwork(BaseModel):
     name: str = ""
     variables: dict[str, Variable] = Field(default_factory=dict)
     factors: list[Factor] = Field(default_factory=list)
-    # Topologia explícita — usada pelo pipeline MPE (parse_bif).
-    # Quando None, parents é derivado de factors (modo VE numérico).
-    _parents: dict[str, tuple[str, ...]] | None = None
+    explicit_parents: dict[str, tuple[str, ...]] | None = Field(
+        default=None,
+        exclude=True,
+    )
 
     model_config = {"arbitrary_types_allowed": True}
-
-    def model_post_init(self, __context) -> None:
-        # Captura o campo `parents` passado no construtor antes que Pydantic o descarte
-        pass
-
-    @classmethod
-    def model_validate(cls, obj, *args, **kwargs):
-        return super().model_validate(obj, *args, **kwargs)
-
-    def __init__(self, *, parents: dict[str, tuple[str, ...]] | None = None, **data):
-        super().__init__(**data)
-        if parents is not None:
-            object.__setattr__(self, "_parents", parents)
 
     @model_validator(mode="after")
     def validate_factor_scopes(self) -> "BayesianNetwork":
@@ -85,6 +75,86 @@ class BayesianNetwork(BaseModel):
                 raise ValueError(f"Undefined variable '{var.name}' in factor.")
         self.factors.append(factor)
 
+    @classmethod
+    def from_structure(
+        cls,
+        *,
+        variable_states: Mapping[str, Sequence[str]],
+        children: Mapping[str, Iterable[str]],
+        name: str = "",
+    ) -> "BayesianNetwork":
+        """Create a discrete Bayesian network without numeric CPTs.
+
+        ``children`` uses the presentation-friendly ``parent -> children``
+        representation. Variables that have no children may be omitted from
+        that mapping, but every parent and child referenced by an edge must be
+        declared in ``variable_states``.
+        """
+        if not variable_states:
+            raise ValueError("A network must contain at least one variable.")
+
+        variables: dict[str, Variable] = {}
+        for variable_name, states in variable_states.items():
+            if isinstance(states, str):
+                raise ValueError(
+                    f"States for '{variable_name}' must be a sequence, not a string."
+                )
+            variables[variable_name] = Variable(
+                name=variable_name,
+                states=tuple(states),
+            )
+
+        parent_lists: dict[str, list[str]] = {variable: [] for variable in variables}
+        child_sets: dict[str, set[str]] = {variable: set() for variable in variables}
+
+        for parent, raw_children in children.items():
+            if parent not in variables:
+                raise ValueError(f"Unknown parent variable: {parent!r}.")
+            if isinstance(raw_children, str):
+                raise ValueError(
+                    f"Children of '{parent}' must be a sequence, not a string."
+                )
+
+            for child in raw_children:
+                if child not in variables:
+                    raise ValueError(
+                        f"Edge {parent!r} -> {child!r} references an unknown child."
+                    )
+                if child == parent:
+                    raise ValueError(f"Self edge is not allowed: {parent!r} -> {child!r}.")
+                if child in child_sets[parent]:
+                    continue
+                child_sets[parent].add(child)
+                parent_lists[child].append(parent)
+
+        # Fail early with a useful error instead of finding a cycle only when
+        # the semantic compilation has already started.
+        in_degree = {variable: len(parents) for variable, parents in parent_lists.items()}
+        ready = [variable for variable in variables if in_degree[variable] == 0]
+        visited = 0
+        while ready:
+            current = ready.pop(0)
+            visited += 1
+            for child in child_sets[current]:
+                in_degree[child] -= 1
+                if in_degree[child] == 0:
+                    ready.append(child)
+
+        if visited != len(variables):
+            cyclic = sorted(variable for variable, degree in in_degree.items() if degree)
+            raise ValueError(
+                "The network structure must be a DAG; cycle detected involving: "
+                + ", ".join(cyclic)
+            )
+
+        return cls(
+            name=name,
+            variables=variables,
+            explicit_parents={
+                variable: tuple(parents) for variable, parents in parent_lists.items()
+            },
+        )
+
     # ------------------------------------------------------------------
     # Queries
     # ------------------------------------------------------------------
@@ -105,11 +175,11 @@ class BayesianNetwork(BaseModel):
         Mapa de pais de cada variável.
 
         Prioridade:
-        1. `_parents` fornecido explicitamente (parse_bif / pipeline MPE).
+        1. `explicit_parents` fornecido por parse_bif.
         2. Derivado dos `factors` (convention: scope[0]=filho, scope[1:]=pais).
         """
-        if self._parents is not None:
-            return self._parents
+        if self.explicit_parents is not None:
+            return self.explicit_parents
         result: dict[str, tuple[str, ...]] = {name: () for name in self.variables}
         for factor in self.factors:
             if len(factor.scope) > 1:

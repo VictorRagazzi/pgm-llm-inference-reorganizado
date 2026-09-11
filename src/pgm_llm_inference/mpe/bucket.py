@@ -279,3 +279,59 @@ def semantic_message_from_response(
             )
         ],
     )
+
+def split_bucket_by_context_rows(
+    bucket: BucketSpec,
+    max_context_rows_per_call: int,
+) -> list[BucketSpec]:
+    """
+    Divide bucket.context_rows em lotes de até max_context_rows_per_call
+    linhas, retornando uma cópia do BucketSpec por lote (mesmo variable,
+    scope, separator e incoming_messages — só context_rows muda).
+
+    Usado quando o bucket tem mais linhas de contexto do que o permitido
+    numa única chamada LLM. Se não precisar dividir, retorna [bucket].
+    """
+    rows = bucket.context_rows
+
+    if max_context_rows_per_call <= 0:
+        raise ValueError("max_context_rows_per_call deve ser positivo.")
+    if len(rows) <= max_context_rows_per_call:
+        return [bucket]
+
+    batches = [
+        rows[i:i + max_context_rows_per_call]
+        for i in range(0, len(rows), max_context_rows_per_call)
+    ]
+    return [bucket.model_copy(update={"context_rows": batch}) for batch in batches]
+
+
+def merge_bucket_responses(
+    responses: list[BucketResponse],
+    variable: str,
+) -> BucketResponse:
+    """
+    Combina as respostas parciais de um bucket fatiado (uma chamada LLM
+    por lote de context_rows) num único BucketResponse cobrindo todas as
+    linhas do bucket completo. Chamado antes de semantic_message_from_response.
+    """
+    if not responses:
+        raise ValueError(f"Nenhuma resposta para combinar no bucket {variable!r}.")
+
+    observed_value = next(
+        (r.observed_value for r in responses if r.observed_value is not None),
+        None,
+    )
+
+    merged_decisions: list[ContextDecision] = []
+    merged_messages: list[ContextEvidenceMessage] = []
+    for r in responses:
+        merged_decisions.extend(r.decisions)
+        merged_messages.extend(r.messages)
+
+    return BucketResponse(
+        variable=variable,
+        decisions=merged_decisions,
+        observed_value=observed_value,
+        messages=merged_messages,
+    )

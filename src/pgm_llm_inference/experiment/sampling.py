@@ -2,6 +2,78 @@ import random
 from pgm_llm_inference.models import BayesianNetwork
 from pgm_llm_inference.experiment.experiment import run_max_product
 
+def sample_mpe_inconsistent_evidence(
+    network,
+    k: int,
+    forbidden_vars: set[str] | None = None,
+    rng: random.Random | None = None,
+    bias_toward: str = "leaves",
+    bias_prob: float = 1.0,
+    max_retries: int = 10,
+    seen: set[frozenset] | None = None,
+) -> dict[str, str]:
+    """
+    Gera evidência 'oposta' ao MPE: para cada variável escolhida, atribui
+    um valor DIFERENTE do valor que o MPE incondicional atribuiria.
+    Se uma variável tiver domínio unário (sem alternativa possível), ela
+    é descartada da amostra (não há como ser inconsistente nesse caso).
+    """
+    seen = seen if seen is not None else set()
+
+    for _ in range(max_retries):
+        result = _sample_once_inconsistent(network, k, forbidden_vars, rng, bias_toward, bias_prob)
+        key = frozenset(result.items())
+        if key not in seen:
+            seen.add(key)
+            return result
+
+    return result
+
+
+def _sample_once_inconsistent(
+    network,
+    k: int,
+    forbidden_vars: set[str] | None = None,
+    rng: random.Random | None = None,
+    bias_toward: str = "roots",
+    bias_prob: float = 1.0,
+) -> dict[str, str]:
+    rng = rng or random
+    forbidden_vars = forbidden_vars or set()
+
+    candidates = [
+        v for v in network.variables.values()
+        if v.name not in forbidden_vars
+    ]
+
+    depths = compute_topological_depths(network)
+
+    candidates_sorted = sorted(
+        candidates,
+        key=lambda v: (depths.get(v.name, 0), rng.random())
+    )
+
+    mpe_unconditional = run_max_product(
+        network=network,
+        query_vars=[v.name for v in candidates_sorted],
+        evidence={},
+    )
+    mpe_assignment = mpe_unconditional["map_assignment"]
+
+    # Só variáveis com domínio > 1 podem receber valor "inconsistente"
+    invertible = [v for v in candidates_sorted if len(v.states) > 1]
+
+    k = min(k, len(invertible))
+    selected = invertible[:k]
+
+    result = {}
+    for var in selected:
+        mpe_value = mpe_assignment[var.name]
+        alternatives = [val for val in var.states if val != mpe_value]
+        result[var.name] = rng.choice(alternatives)
+
+    return result
+
 def sample_random_evidence(
     network: BayesianNetwork,
     k: int,
@@ -27,7 +99,7 @@ def sample_random_evidence(
     for attempt in range(max_attempts):
         chosen_vars = rng.sample(candidates, k)
         evidence = {
-            v.name: rng.choice(v.domain)
+            v.name: rng.choice(v.states)
             for v in chosen_vars
         }
 
@@ -93,7 +165,7 @@ def compute_log_joint(
         # Índice do valor do filho
         child_var = factor.scope[0]
         try:
-            child_idx = child_var.domain.index(value)
+            child_idx = child_var.states.index(value)
         except ValueError:
             return float("-inf")
 
@@ -101,7 +173,7 @@ def compute_log_joint(
         parent_indices = []
         for p in parent_vars:
             try:
-                parent_indices.append(p.domain.index(evidence[p.name]))
+                parent_indices.append(p.states.index(evidence[p.name]))
             except ValueError:
                 return float("-inf")
 

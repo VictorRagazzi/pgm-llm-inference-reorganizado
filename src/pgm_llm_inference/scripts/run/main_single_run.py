@@ -8,9 +8,8 @@ pipeline ou depurar um dataset novo sem rodar o batch completo de main.py.
 Para varrer múltiplos datasets e tamanhos de evidência, use main.py.
 """
 
-from pathlib import Path
-
 from pgm_llm_inference.io.loaders import load_network
+from pgm_llm_inference.paths import dataset_path
 from pgm_llm_inference.logging.experiment_logger import (
     log_experiment,
     log_experiment_csv,
@@ -18,7 +17,6 @@ from pgm_llm_inference.logging.experiment_logger import (
 from pgm_llm_inference.experiment.llm_factory import build_llm_fn, get_model_name
 from pgm_llm_inference.experiment.experiment import run_single_mpe_experiment
 from pgm_llm_inference.evaluation.metrics import count_llm_hits
-import pgm_llm_inference.utils as utils
 
 
 MPE = "mpe"
@@ -27,22 +25,16 @@ MPE = "mpe"
 def main():
 
     dataset_name = "earthquake.bif.gz"
-    dataset_path = Path(__file__).resolve().parents[2] / "datasets" / dataset_name
+    path = dataset_path(dataset_name)
 
     use_real_llm = False
     use_local_llm = True
-    context_type = None
-
     llm_fn = build_llm_fn(
         use_real_llm=use_real_llm,
         use_local_llm=use_local_llm,
     )
 
-    network, context = load_network(
-        str(dataset_path),
-        context_type,
-        llm_fn,
-    )
+    network = load_network(path)
 
     query_vars = ["JohnCalls", "MaryCalls"]
     evidence = {"Earthquake": "yes"}
@@ -53,8 +45,8 @@ def main():
             network=network,
             evidence=evidence,
             llm_fn=llm_fn,
-            bif_path=dataset_path,
-            max_estimated_llm_calls=5,
+            bif_path=path,
+            max_hidden_variables=5,
         )
 
         result_hits = result["llm"]["llm_predictions"]
@@ -85,15 +77,11 @@ def main():
             "dataset": dataset_name,
             "prompt_type": prompt_type,
             "model_name": get_model_name(use_real_llm),
-            "llm_request_count": utils.llm_request_count,
             "inference_mode": MPE,
         }
 
         log_experiment(log_input)
         log_experiment_csv(log_input)
-
-        utils.llm_request_count = 0
-
 
 if __name__ == "__main__":
     main()

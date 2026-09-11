@@ -1,4 +1,3 @@
-import http
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,7 +5,7 @@ class InferenceConfig(BaseSettings):
     # Logging
     verbose: bool = False
     log_level: str = "INFO"
-    log_file_name: str = "logs/local_test.jsonl"
+    log_file_name: str = "logs/cbeb_local.jsonl"
 
     # Numerical stability
     epsilon: float = 1e-10

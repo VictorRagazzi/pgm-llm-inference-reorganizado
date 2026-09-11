@@ -119,30 +119,6 @@ class BucketResponse(BaseModel):
     messages: list[ContextEvidenceMessage] = Field(default_factory=list)
 
 
-class ReconstructionResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    hidden_assignment: dict[str, str]
-    complete_assignment: dict[str, str]
-    explanation: list[str] = Field(default_factory=list)
-
-
-class RepairSuggestion(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    variable: str
-    value: str
-    reason: str | None = None
-
-
-class AuditResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    accept: bool
-    repair: RepairSuggestion | None = None
-    reason: str
-
-
 # ---------------------------------------------------------------------------
 # Tipos de rastreamento de prompt / retry
 # ---------------------------------------------------------------------------

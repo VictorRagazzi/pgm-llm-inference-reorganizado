@@ -75,7 +75,11 @@ def parse_bif(path: Path) -> BayesianNetwork:
                 )
         parents[child] = parsed_parents
 
-    return BayesianNetwork(name=network_name, variables=variables, parents=parents)
+    return BayesianNetwork(
+        name=network_name,
+        variables=variables,
+        explicit_parents=parents,
+    )
 
 
 # ---------------------------------------------------------------------------

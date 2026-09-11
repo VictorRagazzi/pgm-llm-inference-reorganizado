@@ -2,10 +2,8 @@ import json
 import requests
 from pgm_llm_inference.core.config import InferenceConfig
 from pydantic import BaseModel
-import re
-import time
-from typing import Optional, Type, TypeVar
-from pgm_llm_inference.utils import _extract_last_json_object
+from typing import Type, TypeVar
+from pgm_llm_inference.strategies.llm.parsing import extract_last_json_object
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -15,7 +13,7 @@ def local_llm_structured(prompt: str, schema: Type[T]) -> T:
     raw = local_llm(prompt)
     # print("Raw LLM: ", raw)
     try:
-        data = _extract_last_json_object(raw)
+        data = extract_last_json_object(raw)
     except Exception as e:
         raise RuntimeError(
             "Local LLM did not return valid JSON.\n"

@@ -1,9 +1,7 @@
 import time
 import random
 import pandas as pd
-from typing import List, Dict, Any, Optional
 from pathlib import Path
-from dataclasses import dataclass, field
 
 # pgmpy para amostragem
 from pgmpy.readwrite import BIFReader
@@ -14,29 +12,12 @@ from sklearn.metrics import accuracy_score, f1_score
 
 # Imports do seu projeto
 from pgm_llm_inference.experiment.experiment import run_max_product
-from pgm_llm_inference.utils import load_or_compile
+from pgm_llm_inference.experiment.config import ExperimentConfig
+from pgm_llm_inference.mpe.cache import load_or_compile
 from pgm_llm_inference.mpe import infer_from_compiled, CompiledSemanticMessages
-from pgm_llm_inference.experiment.llm_factory import build_llm_fn
-from pgm_llm_inference.core.config import InferenceConfig
+from pgm_llm_inference.experiment.llm_factory import build_llm_fn, get_model_name
 from pgm_llm_inference.io.loaders import load_network
-from pgm_llm_inference.experiment.batch import make_evidence_sizes
-
-inference_cfg = InferenceConfig()
-
-# Re-adicionando o ExperimentConfig que estava no seu código original
-@dataclass
-class ExperimentConfig:
-    dataset_name: str
-    use_real_llm: bool = False
-    use_local_llm: bool = True
-    inference_mode: str = "mpe"
-    context_type: Optional[str] = None
-    prompt_critique: str = "critique_inference"
-    prompt_types: List[str] = field(default_factory=lambda: ["simple"])
-    evidence_sizes: List[int] = field(default_factory=list)
-    query_sizes: List[int] = field(default_factory=lambda: [1])
-    n_trials: int = 3
-    max_estimated_llm_calls: int = 300
+from pgm_llm_inference.paths import dataset_path, metadata_path, relationship_path
 
 def generate_synthetic_ground_truth(bif_path: str, n_samples: int = 1000, seed: int = 42) -> pd.DataFrame:
     """Gera N amostras a partir da rede bayesiana original."""
@@ -53,11 +34,9 @@ def evaluate_synthetic_pipeline(
     network,
     compiled: CompiledSemanticMessages,
     bif_path: str,
-    llm_fn,
-    evidence_percentages: List[float] = [0.2, 0.4, 0.6],
+    evidence_percentages: list[float] = [0.2, 0.4, 0.6],
     n_samples: int = 100, # Reduzido para teste; use 1000 em prod
     seed: int = 42,
-    use_real_llm: bool = False
 ) -> pd.DataFrame:
     """Roda a avaliação sintética contra CPT Exato e LLM Semântico."""
     
@@ -102,9 +81,6 @@ def evaluate_synthetic_pipeline(
             llm_predictions, _, _ = infer_from_compiled(
                 compiled=compiled,
                 evidence=evidence,
-                llm_fn=llm_fn,
-                apply_audit_repair_enabled=True,
-                use_real_llm=use_real_llm
             )
             time_llm_total += (time.time() - t1)
             
@@ -165,13 +141,12 @@ def main():
 
     cfg = ExperimentConfig(
         dataset_name="",
-        prompt_types=["variable_assignment"],
-        query_sizes=[1, 2],
+        use_real_llm=False,
+        use_local_llm=True,
     )
 
     llm_fn = build_llm_fn(use_real_llm=cfg.use_real_llm, use_local_llm=cfg.use_local_llm)
-
-    BASE_DIR = Path(__file__).resolve().parents[3]
+    model_name = get_model_name(cfg.use_real_llm)
 
     for name in datasets:
         print(f"\n{'=' * 60}")
@@ -180,25 +155,16 @@ def main():
         cfg.dataset_name = name
 
         # --- Carregamento da rede ---
-        path = BASE_DIR / "datasets" / name
-        network, context = load_network(str(path), cfg.context_type, llm_fn)
+        path = dataset_path(name)
+        network = load_network(path)
 
-        # --- COMPILAÇÃO: roda UMA vez por dataset ---
-        num_nodes = len(network.variables.keys())
-        limit = int(num_nodes * 0.5)
-        current_evidence_sizes = make_evidence_sizes(limit)
-        # print(f"\n>>> Testando evidence sizes {current_evidence_sizes}")
-
-        # print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
-
-        model_name = inference_cfg.local_model if cfg.use_local_llm else inference_cfg.openai_model
         compiled = load_or_compile(
             dataset_name=name,
-            network=network,
             model_name=model_name,
+            network=network,
             bif_path=path,
-            metadata_path=BASE_DIR / "metadata" / f"{name.split('.')[0]}.jsonl",
-            relationship_path=BASE_DIR / "relationships" / f"{name.split('.')[0]}.jsonl",
+            metadata_path=metadata_path(name),
+            relationship_path=relationship_path(name),
             llm_fn=llm_fn,
             use_real_llm=cfg.use_real_llm,
         )
@@ -208,19 +174,17 @@ def main():
         # Substituí o laço run_batch() pelo nosso novo pipeline de avaliação
         # print(f"\n>>> [INFERENCE] Iniciando pipeline de avaliação sintética...")
         
-        df_resultados = evaluate_synthetic_pipeline(
+        evaluate_synthetic_pipeline(
             network=network,
             compiled=compiled,
             bif_path=str(path),
-            llm_fn=llm_fn,
             evidence_percentages=[0.2, 0.4, 0.6], # Parametrizável (ex: 20%, 40%, 60%)
             n_samples=100,                        # 100 para teste inicial. Mude para 1000 em prod!
             seed=42,
-            use_real_llm=cfg.use_real_llm
         )
         
         # Opcional: Salvar em CSV para manter um log histórico dos experimentos
-        # output_csv = BASE_DIR / f"synthetic_eval_{name.split('.')[0]}.csv"
+        # output_csv = path.parent / f"synthetic_eval_{name.split('.')[0]}.csv"
         # df_resultados.to_csv(output_csv, index=False)
         # print(f"\n>>> Resultados salvos em: {output_csv}")
 

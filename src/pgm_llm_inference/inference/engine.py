@@ -57,7 +57,8 @@ class InferenceEngine(BaseModel):
         for var_name, value in evidence.items():
             if var_name not in self.network.variables:
                 raise ValueError(f"Evidence variable '{var_name}' not in network")
-            if value not in self.network.variables[var_name].domain:
+            if value not in self.network.variables[var_name].states:
                 raise ValueError(
-                    f"Value '{value}' not in domain {self.network.variables[var_name].domain}"
+                    f"Value '{value}' not in domain "
+                    f"{list(self.network.variables[var_name].states)}"
                 )

@@ -1,8 +1,6 @@
-from typing import Callable, TypeVar, Type
+from typing import Callable, TypeVar
 from pgm_llm_inference.core.config import InferenceConfig
-from pgm_llm_inference.utils import _extract_last_json_object
-import time
-from pydantic import BaseModel
+from pgm_llm_inference.strategies.llm.parsing import extract_last_json_object
 
 
 T = TypeVar("T")
@@ -83,7 +81,7 @@ def create_openai_llm_function(config: InferenceConfig) -> Callable[[str], str]:
                 # time.sleep(2.5)
                 print(f"================== LLM Output ====================\n{raw_text}")
 
-            data = _extract_last_json_object(raw_text)
+            data = extract_last_json_object(raw_text)
             return schema.model_validate(data)
 
         except Exception as e:

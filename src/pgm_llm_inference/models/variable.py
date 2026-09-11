@@ -5,9 +5,8 @@ class Variable(BaseModel):
     """
     Representa uma variável aleatória discreta na rede Bayesiana.
 
-    O campo canônico é `states: tuple[str, ...]`. A property `domain`
-    existe como alias (retorna list) para compatibilidade com o motor
-    de inferência numérica (factor_ops, ve_algorithm, strategies).
+    O domínio discreto é representado pelo campo canônico
+    `states: tuple[str, ...]`.
     """
 
     name: str = Field(..., min_length=1)
@@ -21,11 +20,6 @@ class Variable(BaseModel):
         if len(v) != len(set(v)):
             raise ValueError("States must be unique.")
         return v
-
-    @property
-    def domain(self) -> list[str]:
-        """Alias de `states` como lista — mantém compatibilidade com o VE numérico."""
-        return list(self.states)
 
     @property
     def cardinality(self) -> int:
