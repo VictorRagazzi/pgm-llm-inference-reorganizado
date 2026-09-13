@@ -34,11 +34,17 @@ class VariableMetadata(BaseModel):
 # Tipos de mensagem / decisão do bucket pipeline
 # ---------------------------------------------------------------------------
 
+class DomainScores(BaseModel):
+    by_state: dict[str, float]
+    default_score: float = 0.0
+
+
 class ContextDecision(BaseModel):
     context: dict[str, str]
     selected_value: str
     confidence: str
     rationale: str
+    domain_scores: DomainScores | None = None
 
     @field_validator("context", mode="before")
     @classmethod
@@ -79,6 +85,7 @@ class MessageRow(BaseModel):
     compatibility: str | None = None
     confidence: str | None = None
     rationale: str
+    domain_scores: DomainScores | None = None
 
 
 class SemanticMessage(BaseModel):
