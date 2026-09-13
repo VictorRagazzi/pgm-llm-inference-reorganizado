@@ -70,6 +70,11 @@ def infer_from_compiled(
                 "selected_value": row.selected_value,
                 "confidence": row.confidence,
                 "rationale": row.rationale,
+                "domain_scores": (
+                    domain_scores.model_dump()
+                    if (domain_scores := getattr(row, "domain_scores", None)) is not None
+                    else None
+                ),
             }
             for row in msg.rows
         ]

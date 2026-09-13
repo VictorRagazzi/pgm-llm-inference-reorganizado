@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from pgm_llm_inference.mpe.infer import infer_from_compiled
+from pgm_llm_inference.mpe.types import DomainScores
 
 
 class InferFromCompiledTests(unittest.TestCase):
@@ -29,6 +30,7 @@ class InferFromCompiledTests(unittest.TestCase):
             selected_value="on",
             confidence=0.9,
             rationale="compiled",
+            domain_scores=DomainScores(by_state={"off": -2.0, "on": -0.1}),
         )
         compiled = SimpleNamespace(
             bn=object(),
@@ -65,6 +67,10 @@ class InferFromCompiledTests(unittest.TestCase):
                         "selected_value": "on",
                         "confidence": 0.9,
                         "rationale": "compiled",
+                        "domain_scores": {
+                            "by_state": {"off": -2.0, "on": -0.1},
+                            "default_score": 0.0,
+                        },
                     }
                 ]
             },

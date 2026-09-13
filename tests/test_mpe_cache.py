@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from pgm_llm_inference.mpe.cache import compiled_cache_path, load_or_compile
+from pgm_llm_inference.mpe.compile import COMPILED_SCHEMA_VERSION
 
 
 class CompiledMessagesCacheTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class CompiledMessagesCacheTests(unittest.TestCase):
     def test_compiles_once_and_reuses_the_dataset_cache(self, compile_messages: Mock) -> None:
         compile_messages.return_value = SimpleNamespace(
             messages={"Node": "message"},
-            schema_version=2,
+            schema_version=COMPILED_SCHEMA_VERSION,
         )
 
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -39,7 +39,7 @@ from .types import (
 )
 from .graph import topological_order
 
-COMPILED_SCHEMA_VERSION = 2
+COMPILED_SCHEMA_VERSION = 3
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +283,9 @@ def compile_semantic_messages(
                 prompt=prompt,
                 response_model=BucketResponse,
                 semantic_validator=_make_validator(sub_bucket, alias_map),
+                candidate_states=(
+                    bn.variables[variable].states if not sub_bucket.is_evidence else None
+                ),
             )
             traces.append(trace)
             responses.append(response)

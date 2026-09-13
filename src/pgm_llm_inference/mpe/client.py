@@ -14,6 +14,7 @@ tolerando blocos de código markdown.
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from typing import Any, Callable, TypeVar
@@ -22,9 +23,13 @@ from pydantic import BaseModel, ValidationError
 import httpx
 
 from ..core.config import InferenceConfig
-from .types import LLMAttempt, PromptTrace
+from .types import DomainScores, LLMAttempt, PromptTrace
 
 TModel = TypeVar("TModel", bound=BaseModel)
+
+_SELECTED_VALUE_PATTERN = re.compile(
+    r'"selected_value"\s*:\s*"(?P<value>(?:\\.|[^"\\])*)"'
+)
 
 
 def extract_json_object(response_text: str) -> dict[str, Any]:
@@ -44,6 +49,122 @@ def extract_json_object(response_text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("Expected a JSON object.")
     return parsed
+
+
+def _normalized_token_candidate(token: str) -> str:
+    return token.strip(' \t\r\n"{}[],:')
+
+
+def _domain_scores_from_logprobs(
+    response_text: str,
+    token_logprobs: list[Any],
+    candidate_states: tuple[str, ...],
+) -> list[DomainScores | None]:
+    """Mapeia, quando possível, log-probs de tokens aos selected_value do JSON."""
+    response_bytes = response_text.encode("utf-8")
+    try:
+        token_bytes = [
+            bytes(item.bytes) if getattr(item, "bytes", None) is not None
+            else item.token.encode("utf-8")
+            for item in token_logprobs
+        ]
+    except (AttributeError, TypeError, ValueError):
+        return []
+    if b"".join(token_bytes) != response_bytes:
+        return []
+
+    offsets: list[tuple[int, int]] = []
+    cursor = 0
+    for value in token_bytes:
+        offsets.append((cursor, cursor + len(value)))
+        cursor += len(value)
+
+    canonical = {state.casefold(): state for state in candidate_states}
+    results: list[DomainScores | None] = []
+    for match in _SELECTED_VALUE_PATTERN.finditer(response_text):
+        start = len(response_text[: match.start("value")].encode("utf-8"))
+        end = len(response_text[: match.end("value")].encode("utf-8"))
+        covered = [
+            index
+            for index, (token_start, token_end) in enumerate(offsets)
+            if token_end > start and token_start < end
+        ]
+        if not covered:
+            results.append(None)
+            continue
+
+        try:
+            selected = json.loads(f'"{match.group("value")}"')
+        except json.JSONDecodeError:
+            results.append(None)
+            continue
+        selected_state = canonical.get(str(selected).casefold())
+        if selected_state is None:
+            results.append(None)
+            continue
+
+        try:
+            selected_scores = [
+                float(token_logprobs[index].logprob) for index in covered
+            ]
+        except (AttributeError, TypeError, ValueError):
+            results.append(None)
+            continue
+        if not all(math.isfinite(score) for score in selected_scores):
+            results.append(None)
+            continue
+        by_state = {selected_state: sum(selected_scores)}
+
+        # Alternativas só são comparáveis diretamente quando o valor ocupa um token.
+        # Para candidatos multi-token, o servidor não fornece a continuação condicional
+        # após uma alternativa que diverge do texto efetivamente gerado.
+        if len(covered) == 1:
+            alternatives = getattr(token_logprobs[covered[0]], "top_logprobs", None)
+            for alternative in alternatives or ():
+                try:
+                    state = canonical.get(
+                        _normalized_token_candidate(alternative.token).casefold()
+                    )
+                    score = float(alternative.logprob)
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                if state is not None and math.isfinite(score):
+                    by_state[state] = score
+
+        results.append(DomainScores(by_state=by_state))
+    return results
+
+
+def _attach_domain_scores(
+    parsed: dict[str, Any],
+    response_text: str,
+    token_logprobs: list[Any] | None,
+    candidate_states: tuple[str, ...] | None,
+) -> None:
+    if not token_logprobs or not candidate_states:
+        return
+    decisions = parsed.get("decisions")
+    if not isinstance(decisions, list):
+        return
+    try:
+        scores = _domain_scores_from_logprobs(
+            response_text, token_logprobs, candidate_states
+        )
+    except Exception:
+        # Log-probs são telemetria opcional e nunca invalidam a resposta principal.
+        return
+    if len(scores) != len(decisions):
+        return
+    for decision, domain_scores in zip(decisions, scores):
+        if isinstance(decision, dict) and domain_scores is not None:
+            decision["domain_scores"] = domain_scores.model_dump()
+
+
+def _logprobs_are_unsupported(error: Exception) -> bool:
+    status_code = getattr(error, "status_code", None)
+    return status_code in {400, 422} or (
+        isinstance(error, TypeError) and "logprob" in str(error).casefold()
+    )
 
 
 class LLMJsonClient:
@@ -73,6 +194,7 @@ class LLMJsonClient:
         self.use_real_llm = use_real_llm
         self.dry_run = dry_run
         self._client = None
+        self._logprobs_supported: bool | None = None
  
         if dry_run:
             return
@@ -112,6 +234,7 @@ class LLMJsonClient:
         prompt: str,
         response_model: type[TModel],
         semantic_validator: Callable[[TModel], None] | None = None,
+        candidate_states: tuple[str, ...] | None = None,
     ) -> tuple[TModel, PromptTrace]:
         if self.dry_run:
             raise RuntimeError("complete_json não pode ser chamado em modo dry-run.")
@@ -157,8 +280,24 @@ class LLMJsonClient:
                 # via config se o modelo local não suportar.
                 if self.use_real_llm and self.config.openai_use_json_response_format:
                     call_kwargs["response_format"] = {"type": "json_object"}
- 
-                completion = self._client.chat.completions.create(**call_kwargs)
+
+                request_logprobs = (
+                    bool(candidate_states)
+                    and getattr(self, "_logprobs_supported", None) is not False
+                )
+                if request_logprobs:
+                    call_kwargs["logprobs"] = True
+                    call_kwargs["top_logprobs"] = min(len(candidate_states), 20)
+
+                try:
+                    completion = self._client.chat.completions.create(**call_kwargs)
+                except Exception as error:
+                    if not request_logprobs or not _logprobs_are_unsupported(error):
+                        raise
+                    self._logprobs_supported = False
+                    call_kwargs.pop("logprobs", None)
+                    call_kwargs.pop("top_logprobs", None)
+                    completion = self._client.chat.completions.create(**call_kwargs)
                 response_text = completion.choices[0].message.content or ""
  
                 if self.config.show_llm_output:
@@ -169,6 +308,16 @@ class LLMJsonClient:
                     time.sleep(5)
  
                 parsed = extract_json_object(response_text)
+                choice_logprobs = getattr(completion.choices[0], "logprobs", None)
+                token_logprobs = getattr(choice_logprobs, "content", None)
+                if request_logprobs and "logprobs" in call_kwargs:
+                    self._logprobs_supported = bool(token_logprobs)
+                _attach_domain_scores(
+                    parsed,
+                    response_text,
+                    token_logprobs,
+                    candidate_states,
+                )
                 model = response_model.model_validate(parsed)
                 if semantic_validator is not None:
                     semantic_validator(model)
@@ -199,4 +348,3 @@ class LLMJsonClient:
  
         last_error = trace.attempts[-1].error if trace.attempts else "unknown error"
         raise ValueError(f"LLM response failed validation: {last_error}")
- 
