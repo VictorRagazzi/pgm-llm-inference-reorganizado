@@ -1,7 +1,11 @@
+import pickle
 from types import SimpleNamespace
 
 from pgm_llm_inference.mpe.client import LLMJsonClient, _attach_domain_scores
-from pgm_llm_inference.mpe.types import BucketResponse
+from pgm_llm_inference.mpe.domain_scoring import build_state_code_map
+from pgm_llm_inference.mpe.prompt_builders import build_bucket_prompt
+from pgm_llm_inference.mpe.types import BucketResponse, BucketSpec, DomainScores, MessageRow
+from pgm_llm_inference.models import BayesianNetwork
 
 
 def _token(token: str, logprob: float, alternatives=()):
@@ -19,47 +23,53 @@ def _token(token: str, logprob: float, alternatives=()):
 def test_attaches_scores_to_each_context_decision() -> None:
     response = (
         '{"decisions":['
-        '{"context":{"B":"1"},"selected_value":"1"},'
-        '{"context":{"B":"0"},"selected_value":"0"}'
+        '{"context":{"B":"1"},"selected_value":"B"},'
+        '{"context":{"B":"0"},"selected_value":"A"}'
         "]}"
     )
     parsed = {
         "decisions": [
-            {"context": {"B": "1"}, "selected_value": "1"},
-            {"context": {"B": "0"}, "selected_value": "0"},
+            {"context": {"B": "1"}, "selected_value": "B"},
+            {"context": {"B": "0"}, "selected_value": "A"},
         ]
     }
-    first_value = response.index('"selected_value":"1"') + len('"selected_value":"')
-    second_value = response.index('"selected_value":"0"') + len('"selected_value":"')
+    first_value = response.index('"selected_value":"B"') + len('"selected_value":"')
+    second_value = response.index('"selected_value":"A"') + len('"selected_value":"')
     token_logprobs = [
         _token(response[:first_value], -0.01),
-        _token("1", -0.1, (("0", -2.0), ("1", -0.1))),
+        _token(
+            "B",
+            -0.1,
+            (("A", -2.0), ("B", -0.1), ('"A', -9.0), ('"B', -8.0)),
+        ),
         _token(response[first_value + 1 : second_value], -0.01),
-        _token("0", -0.2, (("0", -0.2), ("1", -1.7))),
+        _token("A", -0.2, (("A", -0.2), ("B", -1.7))),
         _token(response[second_value + 1 :], -0.01),
     ]
 
-    _attach_domain_scores(parsed, response, token_logprobs, ("0", "1"))
+    _attach_domain_scores(parsed, response, token_logprobs, ("off", "on"))
 
+    assert parsed["decisions"][0]["selected_value"] == "on"
     assert parsed["decisions"][0]["domain_scores"]["by_state"] == {
-        "0": -2.0,
-        "1": -0.1,
+        "off": -2.0,
+        "on": -0.1,
     }
+    assert parsed["decisions"][1]["selected_value"] == "off"
     assert parsed["decisions"][1]["domain_scores"]["by_state"] == {
-        "0": -0.2,
-        "1": -1.7,
+        "off": -0.2,
+        "on": -1.7,
     }
 
 
 def test_missing_logprobs_leaves_response_unchanged() -> None:
-    parsed = {"decisions": [{"selected_value": "1"}]}
+    parsed = {"decisions": [{"selected_value": "B"}]}
 
-    _attach_domain_scores(parsed, '{"decisions":[]}', None, ("0", "1"))
+    _attach_domain_scores(parsed, '{"decisions":[]}', None, ("off", "on"))
 
-    assert parsed == {"decisions": [{"selected_value": "1"}]}
+    assert parsed == {"decisions": [{"selected_value": "on"}]}
 
 
-def test_partial_or_invalid_logprobs_never_invalidate_response() -> None:
+def test_partial_or_invalid_logprobs_never_create_an_incomplete_vector() -> None:
     response = '{"decisions":[{"selected_value":"1"}]}'
     value_offset = response.index('"selected_value":"1"') + len('"selected_value":"')
     without_alternatives = [
@@ -71,7 +81,7 @@ def test_partial_or_invalid_logprobs_never_invalidate_response() -> None:
 
     _attach_domain_scores(parsed, response, without_alternatives, ("0", "1"))
 
-    assert parsed["decisions"][0]["domain_scores"]["by_state"] == {"1": -0.1}
+    assert parsed == {"decisions": [{"selected_value": "1"}]}
 
     invalid = [*without_alternatives]
     invalid[1] = SimpleNamespace(token="1", bytes=[49], logprob=None)
@@ -80,6 +90,32 @@ def test_partial_or_invalid_logprobs_never_invalidate_response() -> None:
     _attach_domain_scores(untouched, response, invalid, ("0", "1"))
 
     assert untouched == {"decisions": [{"selected_value": "1"}]}
+
+
+def test_bucket_prompt_uses_short_codes_for_multitoken_states() -> None:
+    network = BayesianNetwork.from_structure(
+        variable_states={"A": ("Treatment_success", "Treatment_failure")},
+        children={},
+    )
+    bucket = BucketSpec(
+        variable="A",
+        is_evidence=False,
+        observed_value=None,
+        local_scope=("A",),
+        separator=(),
+        context_rows=[{}],
+        incoming_messages=[],
+    )
+
+    prompt = build_bucket_prompt(bucket, network, {}, None, {})
+
+    assert build_state_code_map(network.variables["A"].states) == {
+        "A": "Treatment_success",
+        "B": "Treatment_failure",
+    }
+    assert '"candidate_state_codes": {' in prompt
+    assert '"A": "Treatment_success"' in prompt
+    assert '"selected_value": "A | B"' in prompt
 
 
 def test_client_retries_without_logprobs_when_model_rejects_them() -> None:
@@ -132,6 +168,7 @@ def test_client_retries_without_logprobs_when_model_rejects_them() -> None:
 
     assert response.decisions[0].domain_scores is None
     assert calls[0]["logprobs"] is True
+    assert calls[0]["top_logprobs"] == 20
     assert "logprobs" not in calls[1]
 
     client.complete_json(
@@ -144,3 +181,18 @@ def test_client_retries_without_logprobs_when_model_rejects_them() -> None:
 
     assert len(calls) == 3
     assert "logprobs" not in calls[2]
+
+
+def test_complete_domain_scores_survive_pickle_round_trip() -> None:
+    row = MessageRow(
+        context={"B": "on"},
+        selected_value="Treatment_success",
+        rationale="test",
+        domain_scores=DomainScores(
+            by_state={"Treatment_success": -0.1, "Treatment_failure": -2.0}
+        ),
+    )
+
+    restored = pickle.loads(pickle.dumps(row))
+
+    assert restored.domain_scores == row.domain_scores

@@ -104,7 +104,13 @@ It does not call the LLM.
 ### `SemanticMessage`
 
 Table produced for a variable. Each `MessageRow` contains context,
-`selected_value`, confidence, and rationale. The historical name `llm_cpt`
+`selected_value`, confidence, rationale, and optional per-state
+`domain_scores`. During compilation, states are represented to the LLM by
+short categorical codes so token log-probabilities can be compared at the
+same output position. The codes are converted back to canonical
+`Variable.states` before the message is stored. These scores measure the
+model's categorical decoding preference and are not numeric CPT
+probabilities. The historical name `llm_cpt`
 appears in logs, but these rows are not numeric probabilities.
 
 ### Backpointer

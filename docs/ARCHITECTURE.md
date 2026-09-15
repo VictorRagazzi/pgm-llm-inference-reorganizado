@@ -201,11 +201,16 @@ LLM. It:
 7. enumerates all combinations of the separator;
 8. splits large contexts across calls, when necessary;
 9. rigorously validates names, states, and coverage of the returned rows;
-10. stores one `SemanticMessage` per variable.
+10. requests token log-probabilities over short categorical state codes when
+    the provider supports them;
+11. converts those codes back to canonical `Variable.states` and stores one
+    `SemanticMessage` per variable.
 
 The resulting object is `CompiledSemanticMessages`, containing messages,
 order, briefing, network, aliases, metadata, notes, traces, and schema
-version.
+version. `MessageRow.domain_scores` is either a complete score vector for the
+variable domain or `None`; partial token alternatives are not presented as a
+complete distribution.
 
 ### 6.3 Current compilation invariant
 
@@ -245,12 +250,12 @@ this is an algorithmic change, not a code reorganization.
 The active path is:
 
 ```text
-<dataset>.compiled.pkl
+<dataset>.<model>_VE.compiled.pkl
 ```
 
 `model_name` is passed through to `compiled_cache_path`. There is, in the
-file itself, a commented-out switch to include the model in the name. This
-comment is kept intentionally to toggle experiments.
+file itself, a commented-out switch to use one file per dataset. This comment
+is kept intentionally to toggle experiments.
 
 The cache has a `COMPILED_SCHEMA_VERSION`. A pickle without the current
 version is rejected and triggers a new compilation. Since recompiling can

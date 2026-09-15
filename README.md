@@ -170,21 +170,29 @@ representação BIF utilizada pelos experimentos principais.
 
 ## Cache das compilações
 
-Por padrão, cada dataset usa:
+Na configuração ativa, cada par de dataset e modelo usa:
 
 ```text
-src/tables/<dataset>.compiled.pkl
+src/tables/<dataset>.<modelo>_VE.compiled.pkl
 ```
 
-O parâmetro `model_name` já percorre o fluxo de cache. Em `mpe/cache.py` há
-um switch comentado para usar nomes de arquivo separados por modelo durante
-os experimentos.
+O parâmetro `model_name` percorre o fluxo de cache. Em `mpe/cache.py` há um
+switch comentado para voltar temporariamente a um arquivo único por dataset;
+esse comentário é intencional.
 
-O formato atual possui `COMPILED_SCHEMA_VERSION = 2`. Caches de versões
+O formato atual possui `COMPILED_SCHEMA_VERSION = 4`. Caches de versões
 anteriores são considerados incompatíveis e fazem `load_or_compile` iniciar
 uma nova compilação. Como essa operação pode consumir créditos do provedor,
 preserve uma cópia dos caches antigos caso ainda precise executá-los com uma
 versão anterior do código.
+
+Durante a compilação de variáveis ocultas, cada estado recebe um código curto
+(`A`, `B`, `C`...) usado apenas na resposta da LLM. Os log-probs desses códigos
+são convertidos novamente para os nomes canônicos de `Variable.states` e
+armazenados por context row em `MessageRow.domain_scores`. Quando o modelo ou
+provedor não fornece log-probs, o campo permanece opcional e o restante do
+fluxo não muda. Resultados produzidos antes da versão 4 não são diretamente
+comparáveis a esses scores categóricos.
 
 ## Executando experimentos
 

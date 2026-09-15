@@ -18,6 +18,7 @@ from .graph import (
     relationship_notes_payload,
     topological_order,
 )
+from .domain_scoring import build_state_code_map
 from .io import json_dumps
 from .state_semantics import network_state_meanings, resolve_state_meanings
 from ..models import BayesianNetwork
@@ -241,6 +242,7 @@ def build_bucket_prompt(
 
     candidate_states = list(bn.variables[variable].states)
     states_str = " | ".join(candidate_states)
+    state_codes = build_state_code_map(tuple(candidate_states))
 
     payload = {
         "task": "semantic_bucket_argmax",
@@ -252,6 +254,7 @@ def build_bucket_prompt(
         "is_evidence": bucket.is_evidence,
         "observed_value": bucket.observed_value,
         "candidate_states": candidate_states,
+        "candidate_state_codes": state_codes if not bucket.is_evidence else None,
         "local_family_scope": list(bucket.local_scope),
         "separator_variables": [
             variable_payload(item, bn, metadata, children) for item in bucket.separator
@@ -289,12 +292,13 @@ def build_bucket_prompt(
             "state."
         )
     else:
+        codes_str = " | ".join(state_codes)
         schema = {
             "variable": variable,
             "decisions": [
                 {
                     "context": "JSON object with variable_id: state pairs",
-                    "selected_value": states_str,
+                    "selected_value": codes_str,
                     "confidence": "high | medium | low",
                     "rationale": "short reason",
                 }
@@ -302,6 +306,8 @@ def build_bucket_prompt(
         }
         instruction = (
             f"This variable is hidden. Its legal states are: {states_str}. "
+            f"Use candidate_state_codes and return only its code in selected_value "
+            f"({codes_str}), never the full state name. "
             "For every context row, choose the single state that makes this bucket "
             "most jointly plausible. Use the graph, labels, evidence pressure, and "
             "incoming semantic messages. Compare all candidate states internally "
@@ -343,7 +349,8 @@ def build_bucket_prompt(
         "Rules:\n"
         "- Return one row for every context row and no extra rows.\n"
         "- Use BIF variable IDs in contexts.\n"
-        f"- Use only legal states from candidate_states: {states_str}.\n"
+        "- For hidden variables, selected_value must be one exact code from "
+        "candidate_state_codes.\n"
         "- Keep rationales concise; do not reveal hidden step-by-step reasoning.\n"
         "- Return valid JSON only.\n\n"
         f"Required JSON shape:\n{json_dumps(schema)}\n\n"

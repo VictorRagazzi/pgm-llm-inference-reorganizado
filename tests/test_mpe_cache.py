@@ -11,7 +11,7 @@ from pgm_llm_inference.mpe.compile import COMPILED_SCHEMA_VERSION
 
 
 class CompiledMessagesCacheTests(unittest.TestCase):
-    def test_default_switch_keeps_one_cache_file_per_dataset(self) -> None:
+    def test_active_switch_keeps_one_cache_file_per_dataset_and_model(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             cache_directory = Path(temporary_directory)
             with patch(
@@ -20,7 +20,7 @@ class CompiledMessagesCacheTests(unittest.TestCase):
             ):
                 path = compiled_cache_path("network.bif", "provider/model")
 
-        self.assertEqual(path.name, "network.compiled.pkl")
+        self.assertEqual(path.name, "network.provider__model_VE.compiled.pkl")
 
     @patch("pgm_llm_inference.mpe.cache.compile_semantic_messages")
     def test_compiles_once_and_reuses_the_dataset_cache(self, compile_messages: Mock) -> None:

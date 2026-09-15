@@ -23,6 +23,7 @@ from pydantic import BaseModel, ValidationError
 import httpx
 
 from ..core.config import InferenceConfig
+from .domain_scoring import MAX_TOP_LOGPROBS, build_state_code_map
 from .types import DomainScores, LLMAttempt, PromptTrace
 
 TModel = TypeVar("TModel", bound=BaseModel)
@@ -51,8 +52,19 @@ def extract_json_object(response_text: str) -> dict[str, Any]:
     return parsed
 
 
-def _normalized_token_candidate(token: str) -> str:
-    return token.strip(' \t\r\n"{}[],:')
+_JSON_TOKEN_AFFIXES = frozenset(' \t\r\n"{}[],:')
+
+
+def _token_affixes(token: str, value: str) -> tuple[str, str] | None:
+    """Return JSON punctuation around an exact categorical token value."""
+    for start in range(len(token)):
+        if not token.startswith(value, start):
+            continue
+        prefix = token[:start]
+        suffix = token[start + len(value) :]
+        if all(character in _JSON_TOKEN_AFFIXES for character in prefix + suffix):
+            return prefix, suffix
+    return None
 
 
 def _domain_scores_from_logprobs(
@@ -79,7 +91,9 @@ def _domain_scores_from_logprobs(
         offsets.append((cursor, cursor + len(value)))
         cursor += len(value)
 
+    state_codes = build_state_code_map(candidate_states)
     canonical = {state.casefold(): state for state in candidate_states}
+    canonical.update({code.casefold(): state for code, state in state_codes.items()})
     results: list[DomainScores | None] = []
     for match in _SELECTED_VALUE_PATTERN.finditer(response_text):
         start = len(response_text[: match.start("value")].encode("utf-8"))
@@ -119,19 +133,33 @@ def _domain_scores_from_logprobs(
         # Para candidatos multi-token, o servidor não fornece a continuação condicional
         # após uma alternativa que diverge do texto efetivamente gerado.
         if len(covered) == 1:
-            alternatives = getattr(token_logprobs[covered[0]], "top_logprobs", None)
-            for alternative in alternatives or ():
-                try:
-                    state = canonical.get(
-                        _normalized_token_candidate(alternative.token).casefold()
-                    )
-                    score = float(alternative.logprob)
-                except (AttributeError, TypeError, ValueError):
-                    continue
-                if state is not None and math.isfinite(score):
-                    by_state[state] = score
+            token_logprob = token_logprobs[covered[0]]
+            affixes = _token_affixes(token_logprob.token, str(selected))
+            candidates = (
+                state_codes
+                if str(selected) in state_codes
+                else {state: state for state in candidate_states}
+            )
+            if affixes is not None:
+                prefix, suffix = affixes
+                alternatives = getattr(token_logprob, "top_logprobs", None)
+                for alternative in alternatives or ():
+                    try:
+                        score = float(alternative.logprob)
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                    if not math.isfinite(score):
+                        continue
+                    for candidate, state in candidates.items():
+                        if alternative.token == f"{prefix}{candidate}{suffix}":
+                            previous = by_state.get(state, -math.inf)
+                            by_state[state] = max(previous, score)
+                            break
 
-        results.append(DomainScores(by_state=by_state))
+        if set(by_state) == set(candidate_states):
+            results.append(DomainScores(by_state=by_state))
+        else:
+            results.append(None)
     return results
 
 
@@ -141,10 +169,25 @@ def _attach_domain_scores(
     token_logprobs: list[Any] | None,
     candidate_states: tuple[str, ...] | None,
 ) -> None:
-    if not token_logprobs or not candidate_states:
+    if not candidate_states:
         return
     decisions = parsed.get("decisions")
     if not isinstance(decisions, list):
+        return
+
+    state_codes = build_state_code_map(candidate_states)
+    canonical = {state.casefold(): state for state in candidate_states}
+    canonical.update({code.casefold(): state for code, state in state_codes.items()})
+    for decision in decisions:
+        if not isinstance(decision, dict):
+            continue
+        selected = decision.get("selected_value")
+        if isinstance(selected, str):
+            decoded = canonical.get(selected.strip().casefold())
+            if decoded is not None:
+                decision["selected_value"] = decoded
+
+    if not token_logprobs:
         return
     try:
         scores = _domain_scores_from_logprobs(
@@ -287,7 +330,7 @@ class LLMJsonClient:
                 )
                 if request_logprobs:
                     call_kwargs["logprobs"] = True
-                    call_kwargs["top_logprobs"] = min(len(candidate_states), 20)
+                    call_kwargs["top_logprobs"] = MAX_TOP_LOGPROBS
 
                 try:
                     completion = self._client.chat.completions.create(**call_kwargs)
