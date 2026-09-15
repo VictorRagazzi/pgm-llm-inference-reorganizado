@@ -42,9 +42,8 @@ def main():
         # "sachs.bif",
 
         # "adhd_cbeb.bif",
-        # "covid3_cbeb.bif", # ERRO
-        "covid3_TESTE.bif", # ERRO
-        # "covid1_cbeb.bif", # ERRO
+        "covid3.bif", 
+        # "covid1_cbeb.bif",
         # "gonorrhoeae_cbeb.bif",
         # "hepar2_cbeb.bif",
         # "alarm_cbeb.bif",

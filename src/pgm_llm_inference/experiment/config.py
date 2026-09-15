@@ -20,7 +20,7 @@ class ExperimentConfig:
     n_trials: int = 5
     max_context_rows_per_call: int = 96
     max_hidden_variables: int = 300
-    evidence_sampling: str = "mpe_consistent"
+    evidence_sampling: str = "mpe_inconsistent"
 
     def __post_init__(self) -> None:
         if self.inference_mode not in INFERENCE_MODES:

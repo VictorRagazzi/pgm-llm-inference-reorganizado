@@ -14,10 +14,10 @@ def compiled_cache_path(dataset_name: str, model_name: str) -> Path:
     """Return the selected cache location for a dataset and model."""
     COMPILED_TABLES_DIR.mkdir(parents=True, exist_ok=True)
     stem = Path(dataset_name).stem
-    return COMPILED_TABLES_DIR / f"{stem}.compiled.pkl"
 
-    # safe_model = model_name.replace("/", "__").replace(":", "-")
-    # return COMPILED_TABLES_DIR / f"{stem}.{safe_model}_VE.compiled.pkl"
+    # return COMPILED_TABLES_DIR / f"{stem}.compiled.pkl"
+    safe_model = model_name.replace("/", "__").replace(":", "-")
+    return COMPILED_TABLES_DIR / f"{stem}.{safe_model}_VE.compiled.pkl"
 
 def load_or_compile(
     dataset_name: str,

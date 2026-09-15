@@ -125,7 +125,7 @@ def plot_accuracy_by_evidence_position(
     gráfico (mesma lógica de min_n usada nos demais boxplots do paper).
     """
     binned = bin_evidence_position(df, n_bins=n_bins)
-    counts = binned["position_bin"].value_counts(sort=False)
+    counts = binned.dropna(subset=["accuracy"])["position_bin"].value_counts(sort=False)
     valid = [str(b) for b, n in counts.items() if n >= min_n]
 
     if not valid:
@@ -154,21 +154,10 @@ def plot_accuracy_by_evidence_position(
                 flierprops=dict(markerfacecolor=color, markeredgecolor=edge, markersize=5),
             )
 
-        # else:
-            # Exact match é binário por execução; a média por bin é a
-            # proporção de configurações completamente corretas. Um boxplot
-            # de zeros e uns seria pouco informativo, por isso usamos barras + IC95%.
-        #     sns.barplot(
-        #         data=plot_df, x="position_bin", y=metric, order=valid,
-        #         color=color, edgecolor=edge, ax=ax,
-        #         errorbar=("ci", 95), n_boot=2000, seed=42,
-        #     )
-        # count_by_label = {str(k): int(v) for k, v in counts.items()}
-        # ax.set_xticks(range(len(valid)))
-        # ax.set_xticklabels(
-        #     [f"{b}\n(n={count_by_label[b]})" for b in valid],
-        #     fontsize=LABEL_FS,
-        # )
+        count_by_label = {str(position): int(count) for position, count in counts.items()}
+        tick_labels = [f"{position}\n(n={count_by_label[position]})" for position in valid]
+        ax.set_xticks(range(len(valid)), labels=tick_labels)
+
         ax.set_xlabel("Posição normalizada da evidência (0=raiz, 1=folha)", fontsize=AXIS_FS)
         ax.set_ylabel(title, fontsize=AXIS_FS)
         # ax.set_ylim(-0.05, 1.05)

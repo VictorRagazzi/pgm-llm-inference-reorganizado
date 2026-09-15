@@ -31,6 +31,7 @@ IMPORTANTE — antes de rodar:
       dez redes.
 """
 
+import argparse
 import json
 
 from pgm_llm_inference.mpe.cache import load_or_compile
@@ -61,10 +62,11 @@ DATASETS = [
 
 # Rótulo usado para filtrar este experimento dentro do log em analysis.py.
 EXPERIMENT_TAG = "evidence_position"
+EVIDENCE_SAMPLING_CHOICES = ("mpe_consistent", "mpe_inconsistent")
 RESUME = True
 
 
-def completed_evidence_nodes(dataset_name: str) -> set[str]:
+def completed_evidence_nodes(dataset_name: str, evidence_sampling: str) -> set[str]:
     """Pares já logados, para uma retomada não duplicar execuções."""
     if not RESUME or not LOG_PATH.exists():
         return set()
@@ -75,11 +77,41 @@ def completed_evidence_nodes(dataset_name: str) -> set[str]:
             if not line.strip():
                 continue
             record = json.loads(line)
-            if record.get("experiment") == EXPERIMENT_TAG and record.get("dataset") == dataset_name:
+            record_sampling = record.get("evidence_sampling", "mpe_consistent")
+            if record_sampling == EXPERIMENT_TAG:
+                record_sampling = "mpe_consistent"
+            if (
+                record.get("experiment") == EXPERIMENT_TAG
+                and record.get("dataset") == dataset_name
+                and record_sampling == evidence_sampling
+            ):
                 node = record.get("evidence_node")
                 if node is not None:
                     completed.add(node)
     return completed
+
+
+def opposite_mpe_value(network, node: str, mpe_value: str) -> str | None:
+    """Retorna um estado diferente do MPE, ou None se o dominio for unitario."""
+    variable = network.variables[node]
+    for state in variable.states:
+        if state != mpe_value:
+            return state
+    return None
+
+
+def evidence_value_for_node(
+    network,
+    node: str,
+    mpe_assignment: dict[str, str],
+    evidence_sampling: str,
+) -> str | None:
+    mpe_value = mpe_assignment[node]
+    if evidence_sampling == "mpe_consistent":
+        return mpe_value
+    if evidence_sampling == "mpe_inconsistent":
+        return opposite_mpe_value(network, node, mpe_value)
+    raise ValueError(f"Unknown evidence_sampling: {evidence_sampling!r}")
 
 
 def run_evidence_position_for_dataset(
@@ -87,6 +119,7 @@ def run_evidence_position_for_dataset(
     llm_fn,
     cfg: ExperimentConfig,
     max_context_rows_per_call: int = 96,
+    evidence_sampling: str = "mpe_consistent",
 ) -> None:
     path = dataset_path(name)
     network = load_network(path)
@@ -123,10 +156,11 @@ def run_evidence_position_for_dataset(
     cfg.dataset_name = name
     # Rótulo apenas informativo no log (run_experiment não usa este campo
     # para decidir comportamento, só o registra na saída).
-    cfg.evidence_sampling = EXPERIMENT_TAG
+    cfg.evidence_sampling = evidence_sampling
 
     n_vars = len(network.variables)
-    completed = completed_evidence_nodes(name)
+    completed = completed_evidence_nodes(name, evidence_sampling)
+    print(f"    evidence_sampling={evidence_sampling}")
     print(f">>> '{name}': {n_vars} execuções exaustivas (uma por variável)")
     if completed:
         print(f"    Retomada: {len(completed)} nó(s) já concluído(s) serão ignorados.")
@@ -138,7 +172,12 @@ def run_evidence_position_for_dataset(
             print(f"  ⚠ nó '{node}' sem valor no MPE completo, pulando.")
             continue
 
-        evidence = {node: mpe_assignment[node]}
+        evidence_value = evidence_value_for_node(network, node, mpe_assignment, evidence_sampling)
+        if evidence_value is None:
+            print(f"  ⚠ nó '{node}' com domínio unitário, sem valor oposto possível; pulando.")
+            continue
+
+        evidence = {node: evidence_value}
         batch_cfg = {
             "prompt_type": cfg.prompt_types[0],
             "evidence": evidence,
@@ -158,17 +197,44 @@ def run_evidence_position_for_dataset(
 
         log_data["experiment"] = EXPERIMENT_TAG
         log_data["evidence_node"] = node
+        log_data["evidence_mpe_value"] = mpe_assignment[node]
+        log_data["evidence_is_mpe_consistent"] = evidence_value == mpe_assignment[node]
         log_data["node_depth"] = node_depths[node]
         log_data["node_depth_normalized"] = node_depths[node] / max_depth
 
         log_experiment(log_data)
         print(
             f"  [{i}/{n_vars}] nó={node:<20} depth_norm={log_data['node_depth_normalized']:.2f} "
+            f"mpe={mpe_assignment[node]} evidence={evidence_value} "
             f"acc={log_data['accuracy']} exact={log_data['exact_match']}"
         )
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Executa o experimento de posicao da evidencia."
+    )
+    parser.add_argument(
+        "--evidence-sampling",
+        choices=EVIDENCE_SAMPLING_CHOICES,
+        default="mpe_inconsistent",
+        help=(
+            "mpe_consistent usa o valor do MPE completo; "
+            "mpe_inconsistent usa um valor diferente do MPE completo."
+        ),
+    )
+    parser.add_argument(
+        "--mpe-inconsistent",
+        action="store_const",
+        const="mpe_inconsistent",
+        dest="evidence_sampling",
+        help="Atalho para --evidence-sampling mpe_inconsistent.",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     cfg = ExperimentConfig(
         dataset_name="",
         prompt_types=["variable_assignment"],
@@ -178,7 +244,12 @@ def main():
     for name in DATASETS:
         print(f"\n{'=' * 60}\n>>> Posição da evidência — Dataset: {name}\n{'=' * 60}")
         try:
-            run_evidence_position_for_dataset(name, llm_fn, cfg)
+            run_evidence_position_for_dataset(
+                name,
+                llm_fn,
+                cfg,
+                evidence_sampling=args.evidence_sampling,
+            )
         except Exception as e:
             print(f"❌ Falha em '{name}': {e}")
 

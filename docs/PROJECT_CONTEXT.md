@@ -1,356 +1,370 @@
-# Contexto do projeto
+# Project context
 
-Este documento reúne o contexto científico e a terminologia necessários para
-trabalhar no projeto sem reconstruir o domínio a cada tarefa. Para detalhes de
-software, consulte [ARCHITECTURE.md](ARCHITECTURE.md).
+This document gathers the scientific context and terminology needed to work
+on the project without rebuilding the domain for every task. For software
+details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## 1. Problema investigado
+## 1. Problem investigated
 
-Redes Bayesianas representam variáveis aleatórias discretas em um grafo
-direcionado acíclico. Cada variável possui estados e, em uma rede tradicional,
-uma tabela de probabilidade condicional (CPT) quantifica sua distribuição dado
-o estado de seus pais.
+Bayesian Networks represent discrete random variables in a directed acyclic
+graph. Each variable has states and, in a traditional network, a conditional
+probability table (CPT) quantifies its distribution given the state of its
+parents.
 
-O projeto investiga se um Large Language Model consegue substituir parte dessa
-informação numérica por conhecimento semântico. A pergunta central é:
+The project investigates whether a Large Language Model can replace part of
+that numeric information with semantic knowledge. The central question is:
 
-> Dada a estrutura de uma Rede Bayesiana, os estados possíveis e descrições
-> qualitativas do domínio, um LLM consegue produzir configurações plausíveis
-> que se aproximem do MPE obtido pelas CPTs reais?
+> Given the structure of a Bayesian Network, the possible states, and
+> qualitative descriptions of the domain, can an LLM produce plausible
+> configurations that approximate the MPE obtained from the real CPTs?
 
-O objetivo científico não é provar que texto equivale a probabilidade. O
-objetivo é medir empiricamente a qualidade, estabilidade e limitações de uma
-aproximação semântica quando comparada a uma referência numérica.
+The scientific goal is not to prove that text is equivalent to probability.
+The goal is to empirically measure the quality, stability, and limitations of
+a semantic approximation when compared to a numeric reference.
 
-## 2. Dois regimes de uso
+## 2. Two usage regimes
 
-### Avaliação com CPTs
+### Evaluation with CPTs
 
-Nos experimentos principais, as CPTs existem, mas têm papéis separados:
+In the main experiments, the CPTs exist, but they have separate roles:
 
-- o pipeline numérico pode usá-las para calcular o Max-Product exato;
-- o pipeline semântico não deve consultar seus valores;
-- a saída exata serve como gabarito para avaliar a saída semântica.
+- the numeric pipeline may use them to compute the exact Max-Product;
+- the semantic pipeline must not consult their values;
+- the exact output serves as ground truth for evaluating the semantic output.
 
-Essa separação evita vazamento da resposta numérica para o método estudado.
+This separation prevents the numeric answer from leaking into the studied
+method.
 
-### Aplicação sem CPTs
+### Application without CPTs
 
-`scripts/run/cptless_demo.py` demonstra o caso em que existem apenas:
+`scripts/run/cptless_demo.py` demonstrates the case where only the following
+exist:
 
-- nomes das variáveis;
-- estados discretos;
-- arestas do DAG;
-- evidência opcional.
+- variable names;
+- discrete states;
+- DAG edges;
+- optional evidence.
 
-O resultado nesse regime é uma configuração semântica aproximada. Como não há
-CPT, não existe um MPE numérico interno contra o qual provar optimalidade.
+The result in this regime is an approximate semantic configuration. Since
+there is no CPT, there is no internal numeric MPE against which to prove
+optimality.
 
-## 3. Terminologia
+## 3. Terminology
 
-### Rede Bayesiana (BN)
+### Bayesian Network (BN)
 
-Um DAG em que cada nó é uma variável aleatória e cada aresta representa uma
-dependência direta. No código, é `BayesianNetwork`.
+A DAG in which each node is a random variable and each edge represents a
+direct dependency. In the code, this is `BayesianNetwork`.
 
-### Estado
+### State
 
-Um valor discreto permitido para uma variável, por exemplo `low`, `medium` e
-`high`. No código, a fonte canônica é `Variable.states`.
+A discrete value allowed for a variable, for example `low`, `medium`, and
+`high`. In the code, the canonical source is `Variable.states`.
 
-### CPT ou CPD
+### CPT or CPD
 
-Tabela numérica de `P(X | Parents(X))`. Nos fatores internos, a variável filha
-é o primeiro elemento do escopo e os pais vêm depois.
+Numeric table of `P(X | Parents(X))`. In the internal factors, the child
+variable is the first element of the scope and the parents come after.
 
-### Evidência
+### Evidence
 
-Assignment observado e fixo, como `{"Smoker": "yes"}`. Evidência não deve ser
-alterada durante reconstrução.
+Observed and fixed assignment, such as `{"Smoker": "yes"}`. Evidence must not
+be altered during reconstruction.
 
-### Variável oculta
+### Hidden variable
 
-Qualquer variável que não aparece na evidência.
+Any variable that does not appear in the evidence.
 
 ### MAP
 
-Maximum a Posteriori: assignment mais provável para um subconjunto de
-variáveis de consulta, condicionado à evidência.
+Maximum a Posteriori: the most probable assignment for a subset of query
+variables, conditioned on the evidence.
 
 ### MPE
 
-Most Probable Explanation: assignment conjunto mais provável para todas as
-variáveis não observadas, condicionado à evidência.
+Most Probable Explanation: the most probable joint assignment for all
+unobserved variables, conditioned on the evidence.
 
 ### Variable Elimination (VE)
 
-Algoritmo que combina fatores e elimina variáveis. Sum-Product soma a variável
-eliminada; Max-Product mantém o máximo e um backpointer para reconstrução.
+Algorithm that combines factors and eliminates variables. Sum-Product sums
+over the eliminated variable; Max-Product keeps the maximum and a
+backpointer for reconstruction.
 
-### Compilação semântica
+### Semantic compilation
 
-Fase offline em que o LLM recebe estrutura, metadados e contextos e escolhe um
-estado para cada linha das tabelas de decisão.
+Offline phase in which the LLM receives structure, metadata, and contexts and
+chooses a state for each row of the decision tables.
 
-### Inferência semântica
+### Semantic inference
 
-Fase online que fixa a evidência e consulta as tabelas já compiladas. Não chama
-o LLM.
+Online phase that fixes the evidence and queries the already-compiled tables.
+It does not call the LLM.
 
 ### `SemanticMessage`
 
-Tabela produzida para uma variável. Cada `MessageRow` contém contexto,
-`selected_value`, confiança e rationale. O nome histórico `llm_cpt` aparece em
-logs, mas essas linhas não são probabilidades numéricas.
+Table produced for a variable. Each `MessageRow` contains context,
+`selected_value`, confidence, and rationale. The historical name `llm_cpt`
+appears in logs, but these rows are not numeric probabilities.
 
 ### Backpointer
 
-Escolha registrada durante maximização. Na abordagem semântica, é o estado que
-o LLM selecionou para um contexto específico.
+Choice recorded during maximization. In the semantic approach, it is the
+state the LLM selected for a specific context.
 
 ### Markov Blanket
 
-Pais, filhos e co-pais de uma variável. Condicionado ao seu Markov Blanket, o
-nó é independente do restante da rede. O projeto o usa em análises e na etapa
-de reinferência, não como parte da inferência compilada principal.
+Parents, children, and co-parents of a variable. Conditioned on its Markov
+Blanket, the node is independent of the rest of the network. The project uses
+it in analyses and in the reinference step, not as part of the main compiled
+inference.
 
-## 4. Método implementado
+## 4. Implemented method
 
-### 4.1 Conhecimento fornecido ao LLM
+### 4.1 Knowledge provided to the LLM
 
-O LLM recebe uma combinação de:
+The LLM receives a combination of:
 
-- estrutura do DAG;
-- nomes e estados das variáveis;
-- papel topológico de cada nó;
-- descrições, aliases e significados dos estados;
-- notas qualitativas sobre relações entre pais e filhos;
-- briefing global da rede;
-- uma lista exata de contextos para os quais deve produzir decisões.
+- DAG structure;
+- variable names and states;
+- topological role of each node;
+- descriptions, aliases, and meanings of the states;
+- qualitative notes about relationships between parents and children;
+- global network briefing;
+- an exact list of contexts for which it must produce decisions.
 
-Metadados e notas podem existir em disco ou ser gerados pelo próprio LLM antes
-da compilação das mensagens.
+Metadata and notes may exist on disk or be generated by the LLM itself before
+message compilation.
 
-### 4.2 Compilação offline
+### 4.2 Offline compilation
 
-A compilação ocorre com evidência vazia para tornar as tabelas reutilizáveis.
-Para cada variável, o sistema enumera as configurações do separador e exige uma
-resposta para cada uma. Respostas incompletas, estados ilegais e nomes
-desconhecidos são rejeitados.
+Compilation occurs with empty evidence to make the tables reusable. For each
+variable, the system enumerates the separator's configurations and requires a
+response for each one. Incomplete responses, illegal states, and unknown
+names are rejected.
 
-No algoritmo atual:
+In the current algorithm:
 
-- a ordem de compilação é o reverso da ordem topológica;
-- `active_messages` permanece vazio;
-- o contexto de uma variável é essencialmente formado por seus pais;
-- a escolha do LLM é registrada para cada configuração desses pais.
+- the compilation order is the reverse of the topological order;
+- `active_messages` remains empty;
+- a variable's context is essentially formed by its parents;
+- the LLM's choice is recorded for each configuration of those parents.
 
-Portanto, a estrutura compilada atual se comporta como um conjunto de tabelas
-de decisão semânticas condicionais.
+Therefore, the current compiled structure behaves like a set of conditional
+semantic decision tables.
 
-### 4.3 Inferência online
+### 4.3 Online inference
 
-A reconstrução percorre as variáveis em ordem causal:
+Reconstruction traverses the variables in causal order:
 
-1. se a variável é evidência, mantém o valor observado;
-2. caso contrário, reúne os valores já atribuídos ao seu contexto;
-3. procura a linha correspondente na mensagem;
-4. atribui o `selected_value` registrado.
+1. if the variable is evidence, keep the observed value;
+2. otherwise, gather the values already assigned to its context;
+3. look up the corresponding row in the message;
+4. assign the recorded `selected_value`.
 
-A mesma compilação responde a muitas evidências sem custo adicional de LLM.
+The same compilation answers many pieces of evidence with no additional LLM
+cost.
 
-### 4.4 Limite conceitual importante
+### 4.4 Important conceptual limit
 
-Apesar da terminologia LLM-MPE e da inspiração em circuitos de maximização, o
-código atual não implementa toda a propagação de fatores derivados de uma
-bucket elimination numérica. Em particular, evidência em descendentes não
-recalcula retroativamente as escolhas semânticas dos ancestrais.
+Despite the LLM-MPE terminology and the inspiration from maximization
+circuits, the current code does not implement the full propagation of
+derived factors from a numeric bucket elimination. In particular, evidence on
+descendants does not retroactively recompute the semantic choices of
+ancestors.
 
-Isso deve ser tratado como propriedade do método avaliado, não escondido pela
-documentação. Implementar propagação bidirecional, reauditoria online ou novos
-prompts seria uma nova versão do algoritmo e exigiria uma nova avaliação.
+This should be treated as a property of the method being evaluated, not
+hidden by the documentation. Implementing bidirectional propagation, online
+re-auditing, or new prompts would be a new version of the algorithm and would
+require a new evaluation.
 
-## 5. Referência numérica
+## 5. Numeric reference
 
-O baseline exato usa Max-Product sobre as CPTs reais:
+The exact baseline uses Max-Product over the real CPTs:
 
-1. reduz fatores pela evidência;
-2. multiplica fatores relevantes;
-3. maximiza variáveis segundo uma ordem de eliminação;
-4. registra argmax;
-5. reconstrói o assignment conjunto.
+1. reduces factors by the evidence;
+2. multiplies the relevant factors;
+3. maximizes variables according to an elimination order;
+4. records the argmax;
+5. reconstructs the joint assignment.
 
-Sum-Product também existe no motor, mas responde a consultas posteriores em
-vez de produzir o MPE completo.
+Sum-Product also exists in the engine, but it answers posterior queries
+rather than producing the full MPE.
 
-Há ainda um baseline guloso em `evaluation/greedy_mpe.py`: ele percorre a
-ordem topológica e escolhe localmente `argmax P(X | parents(X))`. Esse baseline
-ajuda a separar o ganho do método semântico do comportamento de uma simples
-decodificação causal local.
+There is also a greedy baseline in `evaluation/greedy_mpe.py`: it traverses
+the topological order and locally chooses `argmax P(X | parents(X))`. This
+baseline helps separate the gain from the semantic method from the behavior
+of a simple local causal decoding.
 
-## 6. Desenho dos experimentos
+## 6. Experiment design
 
-### Evidência MPE-consistente
+### MPE-consistent evidence
 
-Seleciona variáveis e usa os valores que elas possuem no MPE incondicional.
-Esse cenário mede o comportamento quando a observação concorda com a
-configuração global de referência.
+Selects variables and uses the values they have in the unconditional MPE.
+This scenario measures behavior when the observation agrees with the global
+reference configuration.
 
-### Evidência MPE-inconsistente
+### MPE-inconsistent evidence
 
-Seleciona valores diferentes daqueles do MPE incondicional. Esse cenário mede
-robustez quando a observação força a solução para fora da configuração padrão.
+Selects values different from those in the unconditional MPE. This scenario
+measures robustness when the observation pushes the solution away from the
+default configuration.
 
-### Evidência aleatória
+### Random evidence
 
-Seleciona estados aleatórios, com possibilidade de rejeitar configurações cuja
-probabilidade parcial seja muito baixa. É um cenário menos controlado.
+Selects random states, with the possibility of rejecting configurations whose
+partial probability is too low. This is a less controlled scenario.
 
-### Proporção de evidência
+### Evidence proportion
 
-Os batches variam o número de variáveis observadas. Para redes pequenas podem
-ser usados todos os tamanhos; para redes maiores, `make_evidence_sizes` escolhe
-pontos esparsos.
+The batches vary the number of observed variables. For small networks, all
+sizes may be used; for larger networks, `make_evidence_sizes` chooses sparse
+points.
 
-### Posição da evidência
+### Evidence position
 
-O experimento `run_evidence_pos` usa cada variável, individualmente, como
-evidência MPE-consistente e registra sua profundidade normalizada:
+The `run_evidence_pos` experiment uses each variable, individually, as
+MPE-consistent evidence and records its normalized depth:
 
 ```text
-0.0 = raiz
-1.0 = nível mais profundo da rede
+0.0 = root
+1.0 = deepest level of the network
 ```
 
-Isso permite estudar se evidências próximas às raízes ou às folhas afetam o
-desempenho de forma diferente.
+This allows studying whether evidence close to the roots or to the leaves
+affects performance differently.
 
-## 7. Métricas
+## 7. Metrics
 
-### Accuracy por variável
+### Accuracy per variable
 
-Fração das variáveis avaliadas cujo estado semântico coincide com a referência
-Max-Product.
+Fraction of the evaluated variables whose semantic state matches the
+Max-Product reference.
 
 ### Exact match / joint match
 
-Vale 1 somente quando todo o assignment avaliado coincide. É uma métrica mais
-estrita que accuracy por variável.
+Equals 1 only when the entire evaluated assignment matches. This is a
+stricter metric than per-variable accuracy.
 
-### F1 macro e weighted
+### Macro and weighted F1
 
-Tratam os estados previstos como classes. Macro dá o mesmo peso às classes;
-weighted pondera pela frequência observada.
+Treat the predicted states as classes. Macro gives equal weight to classes;
+weighted weighs by observed frequency.
 
 ### Cohen's kappa
 
-Mede concordância descontando a concordância esperada ao acaso. Pode ser
-indefinido quando não há variação suficiente.
+Measures agreement discounting the agreement expected by chance. It can be
+undefined when there is not enough variation.
 
-### Consenso
+### Consensus
 
-Para trials repetidos da mesma configuração, mede a proporção de votos da
-predição modal por variável. Consenso alto mede estabilidade, não correção.
+For repeated trials of the same configuration, measures the proportion of
+votes for the modal prediction per variable. High consensus measures
+stability, not correctness.
 
-### Correlações estruturais
+### Structural correlations
 
-O projeto usa Spearman para relacionar desempenho com:
+The project uses Spearman correlation to relate performance with:
 
-- número de nós e arestas;
-- profundidade do DAG;
-- cardinalidade média e máxima;
-- número de pais por variável;
-- cardinalidade por variável;
-- posição normalizada da evidência.
+- number of nodes and edges;
+- DAG depth;
+- average and maximum cardinality;
+- number of parents per variable;
+- cardinality per variable;
+- normalized evidence position.
 
-No código atual, a coluna histórica `max_degree` calculada em `analysis.structure`
-representa o maior número de pais de um nó, isto é, o grau de entrada máximo,
-e não o grau total do grafo.
+In the current code, the historical column `max_degree`, computed in
+`analysis.structure`, represents the highest number of parents of a node,
+that is, the maximum in-degree, not the total degree of the graph.
 
 ## 8. Datasets
 
-Os datasets principais associados às análises CBEB são:
+The main datasets associated with the CBEB analyses are:
 
-| Arquivo | Rótulo de domínio |
+| File | Domain label |
 |---|---|
-| `adhd_cbeb.bif` | TDAH |
-| `alarm_cbeb.bif` | Monitoramento de UTI |
-| `child_cbeb.bif` | Doenças pediátricas |
-| `covid1_cbeb.bif` | Sintomas de Covid — 1 |
-| `covid3_cbeb.bif` | Sintomas de Covid — 2 |
+| `adhd_cbeb.bif` | ADHD |
+| `alarm_cbeb.bif` | ICU monitoring |
+| `child_cbeb.bif` | Pediatric diseases |
+| `covid1_cbeb.bif` | Covid symptoms — 1 |
+| `covid3_cbeb.bif` | Covid symptoms — 2 |
 | `diabets_cbeb.bif` | Diabetes |
-| `foodallergy1_cbeb.bif` | Alergia — 1 |
-| `foodallergy3_cbeb.bif` | Alergia — 2 |
-| `gonorrhoeae_cbeb.bif` | Gonorreia |
-| `hepar2_cbeb.bif` | Hepatite |
+| `foodallergy1_cbeb.bif` | Allergy — 1 |
+| `foodallergy3_cbeb.bif` | Allergy — 2 |
+| `gonorrhoeae_cbeb.bif` | Gonorrhea |
+| `hepar2_cbeb.bif` | Hepatitis |
 
-O diretório `src/datasets/` também contém redes auxiliares e benchmarks. A
-presença de um arquivo no diretório não significa que ele pertença ao protocolo
-experimental atual; as listas efetivamente executadas ficam nos entry points.
+The `src/datasets/` directory also contains auxiliary networks and
+benchmarks. The presence of a file in the directory does not mean it belongs
+to the current experimental protocol; the lists actually run are found in the
+entry points.
 
-Nomes de arquivos, variáveis e estados fazem parte da identidade experimental.
-Renomeá-los exige atualizar metadados, relacionamentos, caches e logs.
+File names, variables, and states are part of the experimental identity.
+Renaming them requires updating metadata, relationships, caches, and logs.
 
-## 9. Artefatos produzidos
+## 9. Artifacts produced
 
-### Metadados
+### Metadata
 
-Descrições por variável, incluindo display name, descrição, expert note,
-aliases e significado dos estados.
+Per-variable descriptions, including display name, description, expert note,
+aliases, and meaning of the states.
 
-### Notas de relacionamento
+### Relationship notes
 
-Orientações qualitativas sobre mecanismos entre uma variável e seus pais,
-incluindo direção, modulação e armadilhas de raciocínio.
+Qualitative guidance on the mechanisms between a variable and its parents,
+including direction, modulation, and reasoning pitfalls.
 
-### Compilação
+### Compilation
 
-Um pickle `CompiledSemanticMessages` com tudo o que a fase online precisa. O
-pickle inclui traces das chamadas, úteis para auditoria.
+A `CompiledSemanticMessages` pickle with everything the online phase needs.
+The pickle includes traces of the calls, useful for auditing.
 
 ### Logs
 
-JSONL com evidência, predições, referência, confiança, métricas, dataset,
-modelo e campos específicos do experimento.
+JSONL with evidence, predictions, reference, confidence, metrics, dataset,
+model, and experiment-specific fields.
 
-## 10. Reprodutibilidade
+## 10. Reproducibility
 
-Para comparar execuções, registre ou preserve:
+To compare runs, record or preserve:
 
-- commit do código;
-- dataset exato;
-- metadados e notas de relacionamento;
-- arquivo compilado e sua versão de schema;
-- provedor e nome do modelo;
-- temperatura e parâmetros do cliente;
-- prompt vigente;
-- seed e estratégia de amostragem;
-- configuração do experimento;
-- log bruto antes das agregações.
+- code commit;
+- exact dataset;
+- metadata and relationship notes;
+- compiled file and its schema version;
+- provider and model name;
+- temperature and client parameters;
+- current prompt;
+- seed and sampling strategy;
+- experiment configuration;
+- raw log before aggregations.
 
-Reutilizar uma compilação elimina novas chamadas durante a inferência, mas não
-remove a dependência das escolhas feitas pelo modelo durante a compilação.
+Reusing a compilation eliminates new calls during inference, but does not
+remove the dependency on the choices made by the model during compilation.
 
-## 11. Hipóteses e limitações
+## 11. Hypotheses and limitations
 
-- Nomes e descrições carregam conhecimento suficiente para escolhas úteis.
-- Um LLM pode produzir decisões semanticamente coerentes sem ler CPTs.
-- A qualidade depende do modelo, prompt, metadados e domínio.
-- Confiança textual do LLM não é probabilidade calibrada.
-- Accuracy alta não implica recuperação do assignment conjunto.
-- Consenso alto pode refletir erro sistemático.
-- Contextos crescem com o produto das cardinalidades do separador.
-- Datasets e número de redes limitam o poder das correlações em nível de rede.
-- O regime sem CPT não permite medir optimalidade exata internamente.
-- O algoritmo online atual favorece fluxo causal de pais para filhos e não
-  realiza atualização retroativa completa a partir de descendentes.
+- Names and descriptions carry enough knowledge for useful choices.
+- An LLM can produce semantically coherent decisions without reading CPTs.
+- Quality depends on the model, prompt, metadata, and domain.
+- The LLM's textual confidence is not calibrated probability.
+- High accuracy does not imply recovery of the joint assignment.
+- High consensus can reflect systematic error.
+- Contexts grow with the product of the separator's cardinalities.
+- Datasets and the number of networks limit the power of network-level
+  correlations.
+- The no-CPT regime does not allow measuring exact optimality internally.
+- The current online algorithm favors causal flow from parents to children
+  and does not perform full retroactive updating from descendants.
 
-Essas limitações orientam a interpretação dos resultados e não devem ser
-“corrigidas” sem redefinir a hipótese científica e repetir os experimentos.
+These limitations guide the interpretation of the results and should not be
+"fixed" without redefining the scientific hypothesis and repeating the
+experiments.
 
-## 12. Documentos conceituais históricos
+## 12. Historical conceptual documents
 
-Os arquivos `semantic-maximizing-circuits.md` e `online-phase-mpe.md` descrevem
-a motivação baseada em circuitos de maximização e uma formulação conceitual de
-propagação online. Eles são úteis como histórico teórico, mas este documento e
-o código são a referência para o comportamento atualmente implementado.
+The files `semantic-maximizing-circuits.md` and `online-phase-mpe.md`
+describe the motivation based on maximization circuits and a conceptual
+formulation of online propagation. They are useful as theoretical history,
+but this document and the code are the reference for the currently
+implemented behavior.

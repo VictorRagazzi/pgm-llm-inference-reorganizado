@@ -76,7 +76,7 @@ def plot_accuracy_by_evidence_ratio(
     joint_match_column: str = "joint_match",
 ) -> None:
     subset = filter_by_sampling(grouped, evidence_sampling)
-    datasets = sorted(subset["dataset"].unique())
+    datasets = subset["dataset"].unique()
     columns = 5
     rows = math.ceil(len(datasets) / columns) if len(datasets) else 1
     figure, axes = plt.subplots(
@@ -118,8 +118,8 @@ def plot_accuracy_by_evidence_ratio(
                 values[joint_match_column],
                 color=ACCENT_COLOR,
                 marker="s",
-                linewidth=0.75,
-                markersize=2,
+                linewidth=1,
+                markersize=3,
                 alpha=0.85,
                 zorder=3,
                 label="Exact match",
