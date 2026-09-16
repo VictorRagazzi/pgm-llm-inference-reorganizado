@@ -249,6 +249,7 @@ def semantic_message_from_response(
                 confidence=row.confidence,
                 rationale=row.rationale,
                 domain_scores=row.domain_scores,
+                token_scores=row.token_scores,
             )
         )
 
@@ -274,6 +275,7 @@ def semantic_message_from_response(
                 confidence=row.confidence,
                 rationale=row.rationale,
                 domain_scores=row.domain_scores,
+                token_scores=row.token_scores,
             )
             for row in sorted(
                 normalized_decisions,

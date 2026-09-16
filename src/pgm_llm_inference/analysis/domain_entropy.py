@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import pickle
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
@@ -15,6 +16,7 @@ from pgm_llm_inference.mpe.compile import (
     CompiledSemanticMessages,
 )
 from pgm_llm_inference.mpe.io import normalize_assignment
+from pgm_llm_inference.mpe.types import DecisionTokenScores
 from pgm_llm_inference.paths import COMPILED_TABLES_DIR
 
 from .metrics import _group_rows, calc_per_variable_hits
@@ -112,6 +114,62 @@ def domain_entropy(
     )
 
 
+def top_token_statistics(scores: DecisionTokenScores) -> tuple[float, float, int]:
+    """Return top-k conditional entropy, captured mass, and token count.
+
+    The entropy is conditional on the returned alternatives; it is not the
+    full-vocabulary entropy and must not be compared with domain entropy.
+    """
+    logprobs = [item.logprob for item in scores.top_logprobs]
+    if not logprobs:
+        return math.nan, math.nan, 0
+    if not all(math.isfinite(value) for value in logprobs):
+        raise ValueError("Top-token log-probabilities must be finite.")
+    probabilities = [math.exp(value) for value in logprobs]
+    mass = sum(probabilities)
+    if mass <= 0:
+        return math.nan, mass, len(logprobs)
+    conditional = [value / mass for value in probabilities]
+    entropy = -sum(value * math.log(value) for value in conditional if value > 0)
+    return entropy, mass, len(logprobs)
+
+
+def compiled_row_entropy_table(compiled: CompiledSemanticMessages) -> pd.DataFrame:
+    """Summarize both entropy measures for every compiled context row."""
+    records = []
+    for variable, message in compiled.messages.items():
+        domain = compiled.bn.variables[variable].states
+        for row in message.rows:
+            if row.selected_value is None:
+                continue
+            scores = getattr(row, "domain_scores", None)
+            if scores is not None and set(scores.by_state) != set(domain):
+                raise ValueError(f"Incomplete domain scores for {variable!r}.")
+            token_scores = getattr(row, "token_scores", None)
+            token_entropy, token_mass, token_count = (
+                top_token_statistics(token_scores)
+                if token_scores is not None
+                else (math.nan, math.nan, 0)
+            )
+            records.append(
+                {
+                    "variable": variable,
+                    "context": json.dumps(row.context, ensure_ascii=False, sort_keys=True),
+                    "selected_value": row.selected_value,
+                    "domain_size": len(domain),
+                    "domain_entropy": (
+                        domain_entropy(scores.by_state)
+                        if scores is not None
+                        else math.nan
+                    ),
+                    "token_entropy_top_k": token_entropy,
+                    "token_top_k_mass": token_mass,
+                    "token_top_k_count": token_count,
+                }
+            )
+    return pd.DataFrame.from_records(records)
+
+
 def _compiled_for_dataset(
     compiled_cache: CompiledMessagesCache | Mapping[str, CompiledSemanticMessages],
     dataset: str,
@@ -159,7 +217,7 @@ def _row_entropy(
     evidence: Mapping[str, str],
     *,
     score_kind: ScoreKind,
-) -> tuple[dict[str, str], float]:
+) -> tuple[dict[str, str], float, float, float, int]:
     raw_map_assignment = {
         key: value for key, value in map_assignment.items() if key != "_scalar"
     }
@@ -197,10 +255,20 @@ def _row_entropy(
             f"found {len(matching_rows)}."
         )
 
-    scores = getattr(matching_rows[0], "domain_scores", None)
-    if scores is None:
-        return context, math.nan
-    return context, domain_entropy(scores.by_state, score_kind=score_kind)
+    row = matching_rows[0]
+    scores = getattr(row, "domain_scores", None)
+    entropy = (
+        domain_entropy(scores.by_state, score_kind=score_kind)
+        if scores is not None
+        else math.nan
+    )
+    token_scores = getattr(row, "token_scores", None)
+    token_entropy, token_mass, token_count = (
+        top_token_statistics(token_scores)
+        if token_scores is not None
+        else (math.nan, math.nan, 0)
+    )
+    return context, entropy, token_entropy, token_mass, token_count
 
 
 def attach_domain_entropy(
@@ -232,7 +300,7 @@ def attach_domain_entropy(
         evidence = representative.get("evidence", {})
 
         for record in calc_per_variable_hits(rows):
-            context, entropy = _row_entropy(
+            context, entropy, token_entropy, token_mass, token_count = _row_entropy(
                 compiled,
                 record["variable"],
                 assignment,
@@ -240,6 +308,9 @@ def attach_domain_entropy(
                 score_kind=score_kind,
             )
             record["entropy"] = entropy
+            record["token_entropy_top_k"] = token_entropy
+            record["token_top_k_mass"] = token_mass
+            record["token_top_k_count"] = token_count
             record["parent_context"] = context
             records.append(record)
 

@@ -7,16 +7,21 @@ import pytest
 from pgm_llm_inference.analysis.domain_entropy import (
     CompiledMessagesCache,
     attach_domain_entropy,
+    compiled_row_entropy_table,
     domain_entropy,
+    top_token_statistics,
 )
+from pgm_llm_inference.analysis.entropy_plots import plot_compiled_row_entropy
 from pgm_llm_inference.models import BayesianNetwork
 from pgm_llm_inference.mpe.compile import CompiledSemanticMessages
 from pgm_llm_inference.mpe.io import build_alias_map
 from pgm_llm_inference.mpe.types import (
     BriefingResponse,
+    DecisionTokenScores,
     DomainScores,
     MessageRow,
     SemanticMessage,
+    TokenScore,
 )
 
 
@@ -37,6 +42,13 @@ def _compiled() -> CompiledSemanticMessages:
                     rationale="root",
                     domain_scores=DomainScores(
                         by_state={"low": math.log(0.75), "high": math.log(0.25)}
+                    ),
+                    token_scores=DecisionTokenScores(
+                        selected_token=TokenScore(token="A", logprob=math.log(0.6)),
+                        top_logprobs=[
+                            TokenScore(token="A", logprob=math.log(0.6)),
+                            TokenScore(token="B", logprob=math.log(0.3)),
+                        ],
                     ),
                 )
             ],
@@ -102,6 +114,47 @@ def test_domain_entropy_softmaxes_log_scores_and_supports_legacy_probabilities()
     ) == pytest.approx(expected)
 
 
+def test_top_token_entropy_reports_truncation_mass_separately() -> None:
+    scores = DecisionTokenScores(
+        selected_token=TokenScore(token="A", logprob=math.log(0.6)),
+        top_logprobs=[
+            TokenScore(token="A", logprob=math.log(0.6)),
+            TokenScore(token="B", logprob=math.log(0.3)),
+        ],
+    )
+
+    entropy, mass, count = top_token_statistics(scores)
+
+    assert entropy == pytest.approx(
+        -(2 / 3 * math.log(2 / 3) + 1 / 3 * math.log(1 / 3))
+    )
+    assert mass == pytest.approx(0.9)
+    assert count == 2
+
+
+def test_compiled_table_keeps_each_context_row() -> None:
+    table = compiled_row_entropy_table(_compiled())
+
+    assert len(table) == 3
+    parent = table.loc[table["variable"] == "Parent"].iloc[0]
+    assert parent["context"] == "{}"
+    assert parent["token_top_k_mass"] == pytest.approx(0.9)
+    child_rows = table.loc[table["variable"] == "Child"]
+    assert set(child_rows["context"]) == {
+        '{"Parent": "low"}',
+        '{"Parent": "high"}',
+    }
+    assert child_rows["token_entropy_top_k"].isna().all()
+
+
+def test_compiled_entropy_plot_uses_context_rows(tmp_path) -> None:
+    path = tmp_path / "entropy.png"
+
+    plot_compiled_row_entropy(compiled_row_entropy_table(_compiled()), path)
+
+    assert path.is_file()
+
+
 def test_attaches_context_entropy_next_to_existing_correct_metric() -> None:
     table = attach_domain_entropy(_logs(), {"network.bif": _compiled()})
 
@@ -112,11 +165,17 @@ def test_attaches_context_entropy_next_to_existing_correct_metric() -> None:
     assert parent["entropy"] == pytest.approx(
         -(0.75 * math.log(0.75) + 0.25 * math.log(0.25))
     )
+    assert parent["token_top_k_mass"] == pytest.approx(0.9)
+    assert parent["token_top_k_count"] == 2
+    assert parent["token_entropy_top_k"] == pytest.approx(
+        -(2 / 3 * math.log(2 / 3) + 1 / 3 * math.log(1 / 3))
+    )
     assert child["correct"] == 1
     assert child["parent_context"] == {"Parent": "low"}
     assert child["entropy"] == pytest.approx(
         -(0.8 * math.log(0.8) + 0.2 * math.log(0.2))
     )
+    assert math.isnan(child["token_entropy_top_k"])
 
 
 def test_missing_optional_scores_produce_nan() -> None:

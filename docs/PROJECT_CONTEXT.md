@@ -110,7 +110,10 @@ short categorical codes so token log-probabilities can be compared at the
 same output position. The codes are converted back to canonical
 `Variable.states` before the message is stored. These scores measure the
 model's categorical decoding preference and are not numeric CPT
-probabilities. The historical name `llm_cpt`
+probabilities. `MessageRow.token_scores` preserves the raw alternatives at
+the decision token. Its top-k entropy is conditional on the truncated list,
+not an estimate of full-vocabulary entropy or a replacement for domain
+entropy. The historical name `llm_cpt`
 appears in logs, but these rows are not numeric probabilities.
 
 ### Backpointer

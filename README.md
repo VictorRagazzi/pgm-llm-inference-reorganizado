@@ -180,7 +180,7 @@ O parâmetro `model_name` percorre o fluxo de cache. Em `mpe/cache.py` há um
 switch comentado para voltar temporariamente a um arquivo único por dataset;
 esse comentário é intencional.
 
-O formato atual possui `COMPILED_SCHEMA_VERSION = 4`. Caches de versões
+O formato atual possui `COMPILED_SCHEMA_VERSION = 5`. Caches de versões
 anteriores são considerados incompatíveis e fazem `load_or_compile` iniciar
 uma nova compilação. Como essa operação pode consumir créditos do provedor,
 preserve uma cópia dos caches antigos caso ainda precise executá-los com uma
@@ -189,10 +189,27 @@ versão anterior do código.
 Durante a compilação de variáveis ocultas, cada estado recebe um código curto
 (`A`, `B`, `C`...) usado apenas na resposta da LLM. Os log-probs desses códigos
 são convertidos novamente para os nomes canônicos de `Variable.states` e
-armazenados por context row em `MessageRow.domain_scores`. Quando o modelo ou
+armazenados por context row em `MessageRow.domain_scores`. As alternativas
+brutas do token de decisão (até 20 pela API compatível) ficam separadamente em
+`MessageRow.token_scores`. Quando o modelo ou
 provedor não fornece log-probs, o campo permanece opcional e o restante do
-fluxo não muda. Resultados produzidos antes da versão 4 não são diretamente
+fluxo não muda. Resultados produzidos antes da versão 5 não são diretamente
 comparáveis a esses scores categóricos.
+
+Para inspecionar todas as context rows de um pickle novo, sem chamar a LLM:
+
+```bash
+uv run python -m pgm_llm_inference.scripts.analysis.decision_entropy \
+  --compiled src/tables/<dataset>.<modelo>_VE.compiled.pkl \
+  --output-dir plots/decision_entropy
+```
+
+O CSV e o gráfico distinguem entropia do domínio, entropia condicional das
+alternativas top-k e massa de probabilidade coberta pelo top-k. A segunda é
+truncada e não representa a entropia do vocabulário completo. Mesmo para uma
+variável binária, a entropia do domínio já descreve toda a incerteza entre os
+dois estados; os tokens extras servem para diagnosticar incerteza de geração
+e formatação, não para ampliar o domínio da variável.
 
 ## Executando experimentos
 

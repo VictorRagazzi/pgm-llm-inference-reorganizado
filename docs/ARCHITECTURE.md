@@ -210,7 +210,9 @@ The resulting object is `CompiledSemanticMessages`, containing messages,
 order, briefing, network, aliases, metadata, notes, traces, and schema
 version. `MessageRow.domain_scores` is either a complete score vector for the
 variable domain or `None`; partial token alternatives are not presented as a
-complete distribution.
+complete distribution. `MessageRow.token_scores` separately retains the raw
+top-token alternatives at the selected-value position for post-hoc analysis;
+it may also be `None` when the provider omits log-probabilities.
 
 ### 6.3 Current compilation invariant
 

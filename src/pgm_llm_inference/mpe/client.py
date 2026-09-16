@@ -24,7 +24,7 @@ import httpx
 
 from ..core.config import InferenceConfig
 from .domain_scoring import MAX_TOP_LOGPROBS, build_state_code_map
-from .types import DomainScores, LLMAttempt, PromptTrace
+from .types import DecisionTokenScores, DomainScores, LLMAttempt, PromptTrace, TokenScore
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
@@ -67,12 +67,12 @@ def _token_affixes(token: str, value: str) -> tuple[str, str] | None:
     return None
 
 
-def _domain_scores_from_logprobs(
+def _decision_scores_from_logprobs(
     response_text: str,
     token_logprobs: list[Any],
     candidate_states: tuple[str, ...],
-) -> list[DomainScores | None]:
-    """Mapeia, quando possível, log-probs de tokens aos selected_value do JSON."""
+) -> list[tuple[DomainScores | None, DecisionTokenScores | None]]:
+    """Extract state and raw token alternatives at each JSON decision position."""
     response_bytes = response_text.encode("utf-8")
     try:
         token_bytes = [
@@ -94,7 +94,7 @@ def _domain_scores_from_logprobs(
     state_codes = build_state_code_map(candidate_states)
     canonical = {state.casefold(): state for state in candidate_states}
     canonical.update({code.casefold(): state for code, state in state_codes.items()})
-    results: list[DomainScores | None] = []
+    results: list[tuple[DomainScores | None, DecisionTokenScores | None]] = []
     for match in _SELECTED_VALUE_PATTERN.finditer(response_text):
         start = len(response_text[: match.start("value")].encode("utf-8"))
         end = len(response_text[: match.end("value")].encode("utf-8"))
@@ -104,17 +104,17 @@ def _domain_scores_from_logprobs(
             if token_end > start and token_start < end
         ]
         if not covered:
-            results.append(None)
+            results.append((None, None))
             continue
 
         try:
             selected = json.loads(f'"{match.group("value")}"')
         except json.JSONDecodeError:
-            results.append(None)
+            results.append((None, None))
             continue
         selected_state = canonical.get(str(selected).casefold())
         if selected_state is None:
-            results.append(None)
+            results.append((None, None))
             continue
 
         try:
@@ -122,18 +122,34 @@ def _domain_scores_from_logprobs(
                 float(token_logprobs[index].logprob) for index in covered
             ]
         except (AttributeError, TypeError, ValueError):
-            results.append(None)
+            results.append((None, None))
             continue
         if not all(math.isfinite(score) for score in selected_scores):
-            results.append(None)
+            results.append((None, None))
             continue
         by_state = {selected_state: sum(selected_scores)}
+        token_scores = None
 
         # Alternativas só são comparáveis diretamente quando o valor ocupa um token.
         # Para candidatos multi-token, o servidor não fornece a continuação condicional
         # após uma alternativa que diverge do texto efetivamente gerado.
         if len(covered) == 1:
             token_logprob = token_logprobs[covered[0]]
+            raw_alternatives = []
+            for alternative in getattr(token_logprob, "top_logprobs", None) or ():
+                try:
+                    token = str(alternative.token)
+                    score = float(alternative.logprob)
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                if math.isfinite(score):
+                    raw_alternatives.append(TokenScore(token=token, logprob=score))
+            token_scores = DecisionTokenScores(
+                selected_token=TokenScore(
+                    token=token_logprob.token, logprob=selected_scores[0]
+                ),
+                top_logprobs=raw_alternatives,
+            )
             affixes = _token_affixes(token_logprob.token, str(selected))
             candidates = (
                 state_codes
@@ -142,14 +158,8 @@ def _domain_scores_from_logprobs(
             )
             if affixes is not None:
                 prefix, suffix = affixes
-                alternatives = getattr(token_logprob, "top_logprobs", None)
-                for alternative in alternatives or ():
-                    try:
-                        score = float(alternative.logprob)
-                    except (AttributeError, TypeError, ValueError):
-                        continue
-                    if not math.isfinite(score):
-                        continue
+                for alternative in raw_alternatives:
+                    score = alternative.logprob
                     for candidate, state in candidates.items():
                         if alternative.token == f"{prefix}{candidate}{suffix}":
                             previous = by_state.get(state, -math.inf)
@@ -157,9 +167,9 @@ def _domain_scores_from_logprobs(
                             break
 
         if set(by_state) == set(candidate_states):
-            results.append(DomainScores(by_state=by_state))
+            results.append((DomainScores(by_state=by_state), token_scores))
         else:
-            results.append(None)
+            results.append((None, token_scores))
     return results
 
 
@@ -181,6 +191,9 @@ def _attach_domain_scores(
     for decision in decisions:
         if not isinstance(decision, dict):
             continue
+        # Telemetry must come from the provider response, never from model JSON.
+        decision.pop("domain_scores", None)
+        decision.pop("token_scores", None)
         selected = decision.get("selected_value")
         if isinstance(selected, str):
             decoded = canonical.get(selected.strip().casefold())
@@ -190,7 +203,7 @@ def _attach_domain_scores(
     if not token_logprobs:
         return
     try:
-        scores = _domain_scores_from_logprobs(
+        scores = _decision_scores_from_logprobs(
             response_text, token_logprobs, candidate_states
         )
     except Exception:
@@ -198,9 +211,13 @@ def _attach_domain_scores(
         return
     if len(scores) != len(decisions):
         return
-    for decision, domain_scores in zip(decisions, scores):
-        if isinstance(decision, dict) and domain_scores is not None:
+    for decision, (domain_scores, token_scores) in zip(decisions, scores):
+        if not isinstance(decision, dict):
+            continue
+        if domain_scores is not None:
             decision["domain_scores"] = domain_scores.model_dump()
+        if token_scores is not None:
+            decision["token_scores"] = token_scores.model_dump()
 
 
 def _logprobs_are_unsupported(error: Exception) -> bool:

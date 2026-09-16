@@ -39,12 +39,23 @@ class DomainScores(BaseModel):
     default_score: float = 0.0
 
 
+class TokenScore(BaseModel):
+    token: str
+    logprob: float
+
+
+class DecisionTokenScores(BaseModel):
+    selected_token: TokenScore
+    top_logprobs: list[TokenScore]
+
+
 class ContextDecision(BaseModel):
     context: dict[str, str]
     selected_value: str
     confidence: str
     rationale: str
     domain_scores: DomainScores | None = None
+    token_scores: DecisionTokenScores | None = None
 
     @field_validator("context", mode="before")
     @classmethod
@@ -86,6 +97,7 @@ class MessageRow(BaseModel):
     confidence: str | None = None
     rationale: str
     domain_scores: DomainScores | None = None
+    token_scores: DecisionTokenScores | None = None
 
 
 class SemanticMessage(BaseModel):

@@ -39,7 +39,7 @@ from .types import (
 )
 from .graph import topological_order
 
-COMPILED_SCHEMA_VERSION = 4
+COMPILED_SCHEMA_VERSION = 5
 
 
 # ---------------------------------------------------------------------------

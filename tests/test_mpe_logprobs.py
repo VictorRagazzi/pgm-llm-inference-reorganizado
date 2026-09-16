@@ -2,9 +2,18 @@ import pickle
 from types import SimpleNamespace
 
 from pgm_llm_inference.mpe.client import LLMJsonClient, _attach_domain_scores
+from pgm_llm_inference.mpe.bucket import semantic_message_from_response
 from pgm_llm_inference.mpe.domain_scoring import build_state_code_map
+from pgm_llm_inference.mpe.io import build_alias_map
 from pgm_llm_inference.mpe.prompt_builders import build_bucket_prompt
-from pgm_llm_inference.mpe.types import BucketResponse, BucketSpec, DomainScores, MessageRow
+from pgm_llm_inference.mpe.types import (
+    BucketResponse,
+    BucketSpec,
+    DecisionTokenScores,
+    DomainScores,
+    MessageRow,
+    TokenScore,
+)
 from pgm_llm_inference.models import BayesianNetwork
 
 
@@ -54,6 +63,15 @@ def test_attaches_scores_to_each_context_decision() -> None:
         "off": -2.0,
         "on": -0.1,
     }
+    assert parsed["decisions"][0]["token_scores"] == {
+        "selected_token": {"token": "B", "logprob": -0.1},
+        "top_logprobs": [
+            {"token": "A", "logprob": -2.0},
+            {"token": "B", "logprob": -0.1},
+            {"token": '"A', "logprob": -9.0},
+            {"token": '"B', "logprob": -8.0},
+        ],
+    }
     assert parsed["decisions"][1]["selected_value"] == "off"
     assert parsed["decisions"][1]["domain_scores"]["by_state"] == {
         "off": -0.2,
@@ -62,7 +80,15 @@ def test_attaches_scores_to_each_context_decision() -> None:
 
 
 def test_missing_logprobs_leaves_response_unchanged() -> None:
-    parsed = {"decisions": [{"selected_value": "B"}]}
+    parsed = {
+        "decisions": [
+            {
+                "selected_value": "B",
+                "domain_scores": {"by_state": {"off": 0.0, "on": 0.0}},
+                "token_scores": {"top_logprobs": []},
+            }
+        ]
+    }
 
     _attach_domain_scores(parsed, '{"decisions":[]}', None, ("off", "on"))
 
@@ -81,7 +107,8 @@ def test_partial_or_invalid_logprobs_never_create_an_incomplete_vector() -> None
 
     _attach_domain_scores(parsed, response, without_alternatives, ("0", "1"))
 
-    assert parsed == {"decisions": [{"selected_value": "1"}]}
+    assert "domain_scores" not in parsed["decisions"][0]
+    assert parsed["decisions"][0]["token_scores"]["top_logprobs"] == []
 
     invalid = [*without_alternatives]
     invalid[1] = SimpleNamespace(token="1", bytes=[49], logprob=None)
@@ -116,6 +143,48 @@ def test_bucket_prompt_uses_short_codes_for_multitoken_states() -> None:
     assert '"candidate_state_codes": {' in prompt
     assert '"A": "Treatment_success"' in prompt
     assert '"selected_value": "A | B"' in prompt
+
+
+def test_raw_token_scores_reach_compiled_message_row() -> None:
+    network = BayesianNetwork.from_structure(
+        variable_states={"A": ("off", "on")}, children={}
+    )
+    bucket = BucketSpec(
+        variable="A",
+        is_evidence=False,
+        observed_value=None,
+        local_scope=("A",),
+        separator=(),
+        context_rows=[{}],
+        incoming_messages=[],
+    )
+    token_scores = DecisionTokenScores(
+        selected_token=TokenScore(token="B", logprob=-0.1),
+        top_logprobs=[
+            TokenScore(token="B", logprob=-0.1),
+            TokenScore(token="A", logprob=-2.0),
+        ],
+    )
+    response = BucketResponse.model_validate(
+        {
+            "variable": "A",
+            "decisions": [
+                {
+                    "context": {},
+                    "selected_value": "on",
+                    "confidence": "high",
+                    "rationale": "test",
+                    "token_scores": token_scores.model_dump(),
+                }
+            ],
+        }
+    )
+
+    message = semantic_message_from_response(
+        response, bucket, network, build_alias_map(network, {}), {}
+    )
+
+    assert message.rows[0].token_scores == token_scores
 
 
 def test_client_retries_without_logprobs_when_model_rejects_them() -> None:
@@ -191,8 +260,17 @@ def test_complete_domain_scores_survive_pickle_round_trip() -> None:
         domain_scores=DomainScores(
             by_state={"Treatment_success": -0.1, "Treatment_failure": -2.0}
         ),
+        token_scores=DecisionTokenScores(
+            selected_token=TokenScore(token="A", logprob=-0.1),
+            top_logprobs=[
+                TokenScore(token="A", logprob=-0.1),
+                TokenScore(token="B", logprob=-2.0),
+                TokenScore(token='"A', logprob=-3.0),
+            ],
+        ),
     )
 
     restored = pickle.loads(pickle.dumps(row))
 
     assert restored.domain_scores == row.domain_scores
+    assert restored.token_scores == row.token_scores
