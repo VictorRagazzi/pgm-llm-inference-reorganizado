@@ -9,11 +9,13 @@ from .domain_entropy import (
 )
 from .logs import load_logs, translate_dataset, translate_sampling
 from .structure import extract_graph_structure, get_structure_table
+from .token_vectors import compiled_token_vector_table
 
 __all__ = [
     "CompiledMessagesCache",
     "attach_domain_entropy",
     "compiled_row_entropy_table",
+    "compiled_token_vector_table",
     "domain_entropy",
     "top_token_statistics",
     "extract_graph_structure",

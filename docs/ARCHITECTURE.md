@@ -281,6 +281,8 @@ Responsibilities of the `analysis/` layer:
 - `structure.py`: parents, children, depth, and cardinality;
 - `structural_metrics.py`: merges and Spearman correlations;
 - `performance_plots.py` and `structure_plots.py`: visualizations;
+- `token_vectors.py` and `entropy_plots.py`: raw decision-token vectors and
+  per-variable, per-context visualizations;
 - `style.py`: visual constants.
 
 Analysis code does not take part in inference and must not be imported by the
