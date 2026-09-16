@@ -23,7 +23,7 @@ def main() -> None:
     parser.add_argument(
         "--token-vectors-only",
         action="store_true",
-        help="Generate only the raw token-vector CSV and one SVG per variable.",
+        help="Generate only the raw token-vector CSV and one PNG per variable.",
     )
     args = parser.parse_args()
 

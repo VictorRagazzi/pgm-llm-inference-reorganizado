@@ -39,10 +39,10 @@ def plot_compiled_row_entropy(table: pd.DataFrame, output_path: Path) -> None:
 
 
 def token_vector_filename(variable: str) -> str:
-    """Return a deterministic, collision-resistant SVG name for a variable."""
+    """Return a deterministic, collision-resistant PNG name for a variable."""
     safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", variable).strip("._")
     digest = hashlib.sha256(variable.encode("utf-8")).hexdigest()[:8]
-    return f"token_vector_{safe_name or 'variable'}_{digest}.svg"
+    return f"token_vector_{safe_name or 'variable'}_{digest}.png"
 
 
 def plot_token_vector(table: pd.DataFrame, variable: str, output_path: Path) -> None:
@@ -52,6 +52,33 @@ def plot_token_vector(table: pd.DataFrame, variable: str, output_path: Path) -> 
         raise ValueError(f"No token alternatives for variable {variable!r}.")
 
     row_ids = sorted(rows["row_index"].unique())
+    if len(row_ids) == 1:
+        ordered = rows.sort_values("rank")
+        scores = ordered["logprob"].to_numpy()
+        baseline = min(float(scores.min()) - 1, -1)
+        y = np.arange(len(ordered))
+        colors = ["#2C6E9E" if chosen else "#A9B7C2" for chosen in ordered["is_generated"]]
+        fig = Figure(figsize=(12, max(6, 0.38 * len(ordered) + 2)))
+        axis = fig.subplots()
+        axis.barh(y, scores - baseline, left=baseline, color=colors)
+        axis.set_yticks(
+            y,
+            [
+                f"{rank}. {json.dumps(token, ensure_ascii=True)}"
+                for rank, token in zip(ordered["rank"], ordered["token"])
+            ],
+        )
+        axis.invert_yaxis()
+        axis.set_xlim(baseline, 2)
+        for position, score in zip(y, scores):
+            axis.text(float(score) + 0.15, position, f"{score:.2f}", va="center", fontsize=8)
+        axis.set_xlabel("Log-probabilidade bruta (token gerado em azul)")
+        axis.set_title(f"{variable}: context row r{row_ids[0]}")
+        axis.grid(axis="x", alpha=0.25)
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=170)
+        return
+
     row_positions = {row_id: index for index, row_id in enumerate(row_ids)}
     max_rank = int(rows["rank"].max())
     values = np.full((len(row_ids), max_rank), np.nan)
@@ -102,4 +129,4 @@ def plot_token_vector(table: pd.DataFrame, variable: str, output_path: Path) -> 
         )
     fig.colorbar(image, ax=axis, label="Log-probabilidade bruta")
     fig.tight_layout()
-    fig.savefig(output_path)
+    fig.savefig(output_path, dpi=170)

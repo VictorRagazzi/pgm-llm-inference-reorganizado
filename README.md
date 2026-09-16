@@ -211,7 +211,7 @@ variável binária, a entropia do domínio já descreve toda a incerteza entre o
 dois estados; os tokens extras servem para diagnosticar incerteza de geração
 e formatação, não para ampliar o domínio da variável.
 
-Para gerar somente os vetores brutos, um SVG por variável e um CSV com cada
+Para gerar somente os vetores brutos, um PNG por variável e um CSV com cada
 token/context row:
 
 ```bash
@@ -220,8 +220,9 @@ uv run python -m pgm_llm_inference.scripts.analysis.decision_entropy \
   --output-dir figs --token-vectors-only
 ```
 
-Os SVGs ficam em `figs/token_vectors/`. Cada linha representa uma context row,
-e cada coluna uma alternativa ordenada pelo log-prob retornado. Células vazias
+Os PNGs ficam em `figs/token_vectors/`. Para variáveis com várias context rows,
+cada linha representa uma delas e cada coluna uma alternativa ordenada pelo
+log-prob retornado. Células vazias
 indicam tokens não retornados, não probabilidade zero. Os vetores incluem o
 top-k disponível (até 20 pela API atual) e o token gerado se ele ficou fora
 do top-k; não são o vocabulário completo do modelo. O script recusa sobrescrever
