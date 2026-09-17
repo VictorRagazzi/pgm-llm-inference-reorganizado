@@ -42,9 +42,9 @@ def main():
         # "sachs.bif",
 
         # "adhd_cbeb.bif",
-        "covid3.bif", 
+        # "covid3.bif", 
         # "covid1_cbeb.bif",
-        # "gonorrhoeae_cbeb.bif",
+        "gonorrhoeae.bif",
         # "hepar2_cbeb.bif",
         # "alarm_cbeb.bif",
         # "foodallergy3_cbeb.bif",

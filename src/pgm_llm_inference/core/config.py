@@ -23,8 +23,12 @@ class InferenceConfig(BaseSettings):
 
     # OpenAI API settings (also works with compatible proxies)
     openai_api_key: str | None = None
-    openai_base_url: str | None = "https://openrouter.ai/api/v1"
-    openai_model: str = "deepseek/deepseek-v4-flash"
+    # openai_base_url: str | None = "https://openrouter.ai/api/v1"
+    # openai_model: str = "deepseek/deepseek-v4-flash"
+
+    openai_base_url: str | None = "https://integrate.api.nvidia.com/v1"
+    openai_model: str = "deepseek-ai/deepseek-v4-flash-0731"
+    
     # openai_model: str = "anthropic/claaaauuuuudeeee-sooooonneeeeet-4.6"
     # openai_model: str = "~deepseek/deepseek-v4-flash-latest"
     # openai_model: str = "qwen3-coder:30b"

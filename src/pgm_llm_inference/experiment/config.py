@@ -18,9 +18,9 @@ class ExperimentConfig:
     prompt_types: list[str] = field(default_factory=lambda: ["simple"])
     query_sizes: list[int] = field(default_factory=lambda: [1])
     n_trials: int = 5
-    max_context_rows_per_call: int = 96
+    max_context_rows_per_call: int = 32
     max_hidden_variables: int = 300
-    evidence_sampling: str = "mpe_inconsistent"
+    evidence_sampling: str = "mpe_consistent"
 
     def __post_init__(self) -> None:
         if self.inference_mode not in INFERENCE_MODES:
