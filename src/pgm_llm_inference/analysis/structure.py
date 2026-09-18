@@ -126,35 +126,6 @@ def compute_structure_metrics(
     )
 
 
-def get_node_depth_table(
-    datasets: Iterable[str], datasets_dir: Path = DATASETS_DIR
-) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for dataset_name in datasets:
-        try:
-            network = load_network(datasets_dir / dataset_name)
-            parents, children, _ = extract_graph_structure(network)
-            depths = compute_node_depths(list(network.variables), parents, children)
-            max_depth = max(depths.values(), default=0)
-        except Exception as error:
-            print(f"{dataset_name} -> ERRO: {error}")
-            continue
-
-        for variable in network.variables:
-            depth = depths[variable]
-            results.append(
-                {
-                    "dataset": dataset_name,
-                    "label": translate_dataset(dataset_name),
-                    "variable": variable,
-                    "depth": depth,
-                    "max_depth": max_depth,
-                    "depth_normalized": depth / max_depth if max_depth else None,
-                }
-            )
-    return results
-
-
 def get_structure_table(
     datasets: Iterable[str], datasets_dir: Path = DATASETS_DIR
 ) -> list[dict[str, Any]]:

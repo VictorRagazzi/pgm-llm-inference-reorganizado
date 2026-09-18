@@ -1,5 +1,5 @@
 """
-mpe/client.py
+mpe/compile_phase/client.py
 =============
 Cliente LLM do pipeline MPE.
 
@@ -22,15 +22,13 @@ from typing import Any, Callable, TypeVar
 from pydantic import BaseModel, ValidationError
 import httpx
 
-from ..core.config import InferenceConfig
+from ...core.config import InferenceConfig
 from .domain_scoring import MAX_TOP_LOGPROBS, build_state_code_map
-from .types import DecisionTokenScores, DomainScores, LLMAttempt, PromptTrace, TokenScore
+from ..types import DecisionTokenScores, DomainScores, LLMAttempt, PromptTrace, TokenScore
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
-_SELECTED_VALUE_PATTERN = re.compile(
-    r'"selected_value"\s*:\s*"(?P<value>(?:\\.|[^"\\])*)"'
-)
+_SELECTED_VALUE_PATTERN = re.compile(r'"selected_value"\s*:\s*"(?P<value>(?:\\.|[^"\\])*)"')
 
 
 def extract_json_object(response_text: str) -> dict[str, Any]:
@@ -76,7 +74,8 @@ def _decision_scores_from_logprobs(
     response_bytes = response_text.encode("utf-8")
     try:
         token_bytes = [
-            bytes(item.bytes) if getattr(item, "bytes", None) is not None
+            bytes(item.bytes)
+            if getattr(item, "bytes", None) is not None
             else item.token.encode("utf-8")
             for item in token_logprobs
         ]
@@ -118,9 +117,7 @@ def _decision_scores_from_logprobs(
             continue
 
         try:
-            selected_scores = [
-                float(token_logprobs[index].logprob) for index in covered
-            ]
+            selected_scores = [float(token_logprobs[index].logprob) for index in covered]
         except (AttributeError, TypeError, ValueError):
             results.append((None, None))
             continue
@@ -145,9 +142,7 @@ def _decision_scores_from_logprobs(
                 if math.isfinite(score):
                     raw_alternatives.append(TokenScore(token=token, logprob=score))
             token_scores = DecisionTokenScores(
-                selected_token=TokenScore(
-                    token=token_logprob.token, logprob=selected_scores[0]
-                ),
+                selected_token=TokenScore(token=token_logprob.token, logprob=selected_scores[0]),
                 top_logprobs=raw_alternatives,
             )
             affixes = _token_affixes(token_logprob.token, str(selected))
@@ -203,9 +198,7 @@ def _attach_domain_scores(
     if not token_logprobs:
         return
     try:
-        scores = _decision_scores_from_logprobs(
-            response_text, token_logprobs, candidate_states
-        )
+        scores = _decision_scores_from_logprobs(response_text, token_logprobs, candidate_states)
     except Exception:
         # Log-probs são telemetria opcional e nunca invalidam a resposta principal.
         return
@@ -230,10 +223,10 @@ def _logprobs_are_unsupported(error: Exception) -> bool:
 class LLMJsonClient:
     """
     Cliente que envia um prompt ao LLM e valida a resposta como JSON Pydantic.
- 
+
     Faz até `config.openai_max_retries + 1` tentativas, passando o erro
     de validação de volta ao modelo para autocorreção.
- 
+
     Parâmetros
     ----------
     config       : InferenceConfig com as URLs, modelos e flags de debug.
@@ -242,7 +235,7 @@ class LLMJsonClient:
     dry_run      : Se True, o cliente é criado mas complete_json() lança erro.
                    Útil para testes de construção sem chamar a rede.
     """
- 
+
     def __init__(
         self,
         config: InferenceConfig,
@@ -255,12 +248,12 @@ class LLMJsonClient:
         self.dry_run = dry_run
         self._client = None
         self._logprobs_supported: bool | None = None
- 
+
         if dry_run:
             return
- 
+
         from openai import OpenAI
- 
+
         if use_real_llm:
             if not config.openai_api_key:
                 raise ValueError(
@@ -280,12 +273,12 @@ class LLMJsonClient:
                 api_key="lm-studio",
                 base_url=config.local_url.rstrip("/chat/completions").rstrip("/"),
             )
- 
+
     @property
     def _model(self) -> str:
         """Modelo efetivo para a chamada atual."""
         return self.config.openai_model if self.use_real_llm else self.config.local_model
- 
+
     def complete_json(
         self,
         *,
@@ -300,23 +293,20 @@ class LLMJsonClient:
             raise RuntimeError("complete_json não pode ser chamado em modo dry-run.")
         if self._client is None:
             raise RuntimeError("Cliente LLM não foi inicializado.")
- 
+
         trace = PromptTrace(purpose=purpose, variable=variable, prompt=prompt)
         retry_instruction = ""
- 
+
         for attempt_number in range(1, self.config.llm_max_retries + 2):
             request_prompt = prompt + retry_instruction
- 
+
             if self.config.show_llm_prompt:
-                print(
-                    f"\n=== LLM Prompt (tentativa {attempt_number}) ===\n"
-                    f"{request_prompt}\n"
-                )
+                print(f"\n=== LLM Prompt (tentativa {attempt_number}) ===\n{request_prompt}\n")
                 time.sleep(5)
- 
+
             response_text: str | None = None
             parsed: dict[str, Any] | None = None
- 
+
             try:
                 call_kwargs: dict[str, Any] = {
                     "model": self._model,
@@ -334,7 +324,7 @@ class LLMJsonClient:
                     "timeout": httpx.Timeout(2400.0, connect=30.0),
                     "temperature": self.config.openai_temperature,
                 }
- 
+
                 # json_object só é solicitado para modelos que suportam — o LM Studio
                 # suporta para a maioria dos modelos recentes, mas pode ser desabilitado
                 # via config se o modelo local não suportar.
@@ -359,14 +349,11 @@ class LLMJsonClient:
                     call_kwargs.pop("top_logprobs", None)
                     completion = self._client.chat.completions.create(**call_kwargs)
                 response_text = completion.choices[0].message.content or ""
- 
+
                 if self.config.show_llm_output:
-                    print(
-                        f"\n=== LLM Response (tentativa {attempt_number}) ===\n"
-                        f"{response_text}\n"
-                    )
+                    print(f"\n=== LLM Response (tentativa {attempt_number}) ===\n{response_text}\n")
                     time.sleep(5)
- 
+
                 parsed = extract_json_object(response_text)
                 choice_logprobs = getattr(completion.choices[0], "logprobs", None)
                 token_logprobs = getattr(choice_logprobs, "content", None)
@@ -381,7 +368,7 @@ class LLMJsonClient:
                 model = response_model.model_validate(parsed)
                 if semantic_validator is not None:
                     semantic_validator(model)
- 
+
                 trace.attempts.append(
                     LLMAttempt(
                         attempt=attempt_number,
@@ -390,7 +377,7 @@ class LLMJsonClient:
                     )
                 )
                 return model, trace
- 
+
             except (json.JSONDecodeError, ValidationError, ValueError) as error:
                 trace.attempts.append(
                     LLMAttempt(
@@ -405,6 +392,6 @@ class LLMJsonClient:
                     f"Error: {error}\nReturn only corrected JSON matching the "
                     "requested schema and context rows."
                 )
- 
+
         last_error = trace.attempts[-1].error if trace.attempts else "unknown error"
         raise ValueError(f"LLM response failed validation: {last_error}")

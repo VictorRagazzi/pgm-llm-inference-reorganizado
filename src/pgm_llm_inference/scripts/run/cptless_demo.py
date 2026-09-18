@@ -6,7 +6,7 @@ evidência deve usar exatamente um dos estados declarados para sua variável.
 """
 
 from pgm_llm_inference import BayesianNetwork
-from pgm_llm_inference.experiment.llm_factory import build_llm_fn
+from pgm_llm_inference.llm.providers import build_llm_fn
 from pgm_llm_inference.mpe import compile_semantic_messages, infer_from_compiled
 from pgm_llm_inference.mpe.graph import topological_order
 

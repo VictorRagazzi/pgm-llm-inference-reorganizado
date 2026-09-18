@@ -85,11 +85,6 @@ def resolve_state_meanings(
     return {state: llm_meanings.get(state, heuristic[state]) for state in states}
 
 
-def states_pipe(states: tuple[str, ...]) -> str:
-    """Formata estados como 'A|B|C' para uso em schemas de prompt."""
-    return "|".join(states)
-
-
 def network_state_meanings(
     bn,
     metadata: dict[str, VariableMetadata] | None,

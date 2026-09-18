@@ -1,9 +1,9 @@
 from pgm_llm_inference.mpe.cache import load_or_compile
 from pgm_llm_inference.paths import dataset_path, metadata_path, relationship_path
 from pgm_llm_inference.io.loaders import load_network
-from pgm_llm_inference.logging.experiment_logger import log_experiment
+from pgm_llm_inference.experiment.logging import log_experiment
 from pgm_llm_inference.experiment.config import ExperimentConfig
-from pgm_llm_inference.experiment.llm_factory import build_llm_fn, get_model_name
+from pgm_llm_inference.llm.providers import build_llm_fn, get_model_name
 from pgm_llm_inference.experiment.batch import run_batch, make_evidence_sizes
 from pgm_llm_inference.experiment.runner import run_experiment
 
@@ -88,7 +88,7 @@ def main():
         current_evidence_sizes = make_evidence_sizes(limit)
         print(f"\n>>> Testando evidence sizes {current_evidence_sizes}")
 
-        # Tentativas com max_context_rows_per_call decrescente: valor original → 76 → 64
+        # Reduzir o tamanho da chamada preserva a cobertura total dos contextos.
         retry_context_rows = [cfg.max_context_rows_per_call, cfg.max_context_rows_per_call - 20, cfg.max_context_rows_per_call - 30]
         dataset_ok = False
 
@@ -97,8 +97,7 @@ def main():
                 print(f"\n⚠️  Tentativa {attempt + 1}/3 para '{name}' com max_context_rows_per_call={max_rows}...")
             try:
                 # --- COMPILAÇÃO: roda UMA vez por dataset ---
-                # Executa Bucket Elimination com evidence={} → produto cartesiano completo.
-                # Custo: N chamadas LLM (uma por variável).
+                # Compila com evidence={}; buckets grandes exigem várias chamadas.
                 print(f"\n>>> [COMPILE] Compilando mensagens semânticas para '{name}'...")
 
                 compiled = load_or_compile(
@@ -133,7 +132,6 @@ def main():
                         )
 
                         log_experiment(log_data)
-                        # log_experiment_csv(log_data)
 
                     except Exception as e:
                         print(f"❌ Error in experiment ({name}): {e}")

@@ -19,7 +19,7 @@ class BayesianNetwork(BaseModel):
        - `parents` derivado automaticamente de `factors` (scope[0]=filho, scope[1:]=pais).
        - `name` é opcional (default "").
 
-    2. Pipeline MPE (via mpe/io.py → parse_bif):
+    2. Pipeline MPE (via io/loaders.py → parse_bif):
        - `factors` vazio (sem CPTs numéricas).
        - `explicit_parents` fornecido pelo parser.
        - `name` preenchido com o nome da rede do arquivo .bif.

@@ -39,6 +39,10 @@ A compilação é a etapa que pode chamar o LLM. Depois que ela está salva, a
 inferência em `mpe.infer` usa apenas lookup e reconstrução determinística por
 backpointers, sem novas chamadas ao modelo.
 
+Durante a compilação com evidência vazia, mensagens são propagadas entre
+buckets e podem ampliar seus separadores além dos pais. A inferência posterior
+consulta essas decisões sem recalcular mensagens em função da evidência.
+
 ## Organização
 
 ```text
@@ -50,42 +54,41 @@ src/pgm_llm_inference/
 │
 ├── core/                   operações fundamentais
 │   ├── config.py           configuração de runtime e ambiente
-│   ├── conversion.py       conversão dos formatos externos
 │   ├── factor_ops.py       produto, redução, soma e maximização de fatores
 │   └── ordering.py         heurísticas de ordem de eliminação
 │
 ├── inference/              motor numérico de Variable Elimination
-│   ├── engine.py           validação e orquestração da consulta
-│   ├── ve_algorithm.py     algoritmo de eliminação
-│   └── postprocessing.py   normalização e reconstrução numérica
+│   ├── engine.py           VE, reconstrução numérica e referência exata
+│   └── strategies.py       estratégias Sum-Product e Max-Product
 │
-├── strategies/             operações específicas de cada estratégia
-│   ├── sum_product.py       inferência posterior
-│   ├── max_product.py       MAP/MPE exato
-│   └── llm/                 clientes e parsing de respostas LLM
+├── llm/                    clientes de metadados, notas e análises auxiliares
+│   ├── providers.py         seleção e chamadas aos modelos remoto/local
+│   └── parsing.py           parsing das respostas desses clientes
 │
 ├── mpe/                    pipeline semântico LLM-MPE
-│   ├── compile.py           compilação das mensagens semânticas
+│   ├── compile.py           coordenação das fases e tipo compilado
 │   ├── cache.py             persistência e versionamento da compilação
-│   ├── infer.py             inferência sem novas chamadas LLM
-│   ├── reconstruction.py    reconstrução determinística por backpointers
-│   ├── bucket.py            construção e validação dos buckets
-│   ├── prompt_builders.py   prompts usados durante a compilação
-│   ├── metadata_generation.py
-│   ├── relationship_generation.py
+│   ├── infer.py             lookup e reconstrução determinística
 │   ├── graph.py             operações de grafo
-│   ├── state_semantics.py   interpretação dos estados
-│   ├── client.py            cliente estruturado do LLM
-│   ├── io.py                parsing BIF e normalização semântica
-│   └── types.py             schemas do pipeline
+│   ├── normalization.py     nomes, estados e chaves de contexto
+│   ├── state_semantics.py   interpretação compartilhada dos estados
+│   ├── types.py             schemas do pipeline
+│   ├── pre_compile_phase/
+│   │   ├── metadata.py      carregamento e geração de metadados
+│   │   ├── relationships.py carregamento e geração de notas
+│   │   └── briefing.py      contexto semântico e briefing da rede
+│   └── compile_phase/
+│       ├── buckets.py       construção, compilação, validação e propagação
+│       ├── prompts.py       prompts dos buckets
+│       ├── client.py        cliente com validação, retentativas e log-probs
+│       └── domain_scoring.py códigos categóricos dos estados
 │
 ├── experiment/             execução dos experimentos
 │   ├── config.py            ExperimentConfig e modos MAP/MPE
 │   ├── batch.py             geração do batch
 │   ├── sampling.py          estratégias de amostragem de evidência
 │   ├── runner.py            comparação exata versus semântica
-│   ├── experiment.py        operações de experimento de baixo nível
-│   └── llm_factory.py       seleção entre LLM remoto, local e mock
+│   └── logging.py           persistência JSONL
 │
 ├── evaluation/             métricas e benchmarks
 │   ├── metrics.py           accuracy, acertos e comparação de assignments
@@ -98,10 +101,12 @@ src/pgm_llm_inference/
 │   ├── structural_metrics.py
 │   ├── performance_plots.py
 │   ├── structure_plots.py
+│   ├── domain_entropy.py
+│   ├── token_vectors.py
+│   ├── entropy_plots.py
 │   └── style.py             identidade visual compartilhada
 │
-├── logging/                persistência dos resultados
-├── io/                     carregamento de BIF, XDSL, NET, DSC e DNE
+├── io/                     carregamento e conversão de BIF, XDSL, NET, DSC e DNE
 ├── paths.py                caminhos canônicos dos artefatos
 └── scripts/
     ├── run/                entry points de execução
@@ -165,8 +170,9 @@ Os caminhos são definidos centralmente em `pgm_llm_inference.paths`:
 | Resultados dos experimentos | `logs/` |
 
 O loader numérico aceita `.bif`, `.xdsl`, `.net`, `.dsc` e `.dne`, com ou
-sem compactação `.gz`. O pipeline de compilação semântica trabalha com a
-representação BIF utilizada pelos experimentos principais.
+sem compactação `.gz`. O pipeline de compilação semântica usa
+`io.loaders.parse_bif`, que lê somente nomes, estados e topologia do BIF,
+sem carregar as probabilidades numéricas.
 
 ## Cache das compilações
 
@@ -237,9 +243,6 @@ point correspondente.
 # Batch principal: múltiplos datasets e proporções de evidência
 uv run python -m pgm_llm_inference.scripts.run.main
 
-# Uma execução pequena com evidência fixa
-uv run python -m pgm_llm_inference.scripts.run.main_single_run
-
 # Experimento exaustivo de posição da evidência
 uv run python -m pgm_llm_inference.scripts.run.run_evidence_pos
 
@@ -277,13 +280,17 @@ como um MPE numérico exato.
 
 ### Seleção do LLM
 
-Em `ExperimentConfig`:
+Para geração de metadados e notas, `ExperimentConfig` seleciona:
 
 | `use_real_llm` | `use_local_llm` | Cliente selecionado |
 |---:|---:|---|
 | `True` | qualquer valor | API configurada em `PGM_OPENAI_*` |
 | `False` | `True` | servidor configurado em `PGM_LOCAL_*` |
 | `False` | `False` | mock local |
+
+Briefing e decisões dos buckets usam `mpe.compile_phase.client.LLMJsonClient`: remoto quando
+`use_real_llm=True`, local caso contrário. O mock acima não substitui esse
+cliente; os testes simulam os dois caminhos separadamente.
 
 ## Analisando resultados
 
@@ -338,19 +345,25 @@ há um segundo alias para os estados.
 ## Desenvolvimento e validação
 
 ```bash
-uv run pytest -q
+uv run pytest -q -p no:cacheprovider
 uv run ruff check src tests
 uv run python -m compileall -q src tests
+git diff --check
 ```
 
-A suíte cobre carregamento de caminhos, parsing de respostas LLM, cache,
-inferência compilada, execução dos experimentos e agregações de análise.
+A suíte usa redes sintéticas, arquivos temporários e clientes LLM simulados.
+Ela não lê `.env` e bloqueia requisições HTTP. Cobre a referência numérica por
+enumeração, carregamento de formatos, contratos dos clientes, cache,
+compilação, reconstrução, batches e logs JSONL.
+Há também um teste de carregamento de pickle e inferência em um processo novo,
+que verifica que as fases de preparação e compilação não são importadas.
 
-Após a refatoração arquitetural, a validação de referência é:
+`tests/fixtures/pipeline.json` contém a referência capturada antes da
+simplificação: hashes de 8 prompts, mensagens compiladas, resultados de
+inferência, 63 configurações de batch e registros JSONL. Não regenere esse
+arquivo para acomodar diferenças sem verificar sua causa.
 
-```text
-20 testes aprovados
-Ruff aprovado
-compileall aprovado
-smoke test numérico com asia.bif aprovado
-```
+A simplificação preserva o comando principal, as repetições, seeds,
+retentativas e métricas. Também preserva os caminhos das classes serializadas
+e o schema de cache 5; não exige migração nem recompilação. Os imports internos
+consolidados estão documentados em [ARCHITECTURE.md](docs/ARCHITECTURE.md).

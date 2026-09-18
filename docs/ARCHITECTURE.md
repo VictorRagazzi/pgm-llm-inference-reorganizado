@@ -2,7 +2,7 @@
 
 This document describes the architecture implemented in the current code.
 The [README](../README.md) is the usage guide; [PROJECT_CONTEXT](PROJECT_CONTEXT.md)
-explains the scientific problem; and [AGENTS](AGENTS.md) contains operational
+explains the scientific problem; and [AGENTS](../AGENTS.md) contains operational
 rules for changes to the project.
 
 ## 1. Overview
@@ -25,7 +25,7 @@ flowchart TD
     Scripts["scripts/*\nentry points"] --> Experiment["experiment\norchestration"]
     Scripts --> Analysis["analysis\nreports and charts"]
     Experiment --> MPE["mpe\nsemantic compilation and inference"]
-    Experiment --> Numeric["inference + strategies\nnumeric inference"]
+    Experiment --> Numeric["inference\nnumeric inference"]
     Experiment --> Evaluation["evaluation\nmetrics and benchmarks"]
     Analysis --> IO["io\nloading"]
     MPE --> Models["models\ncanonical model"]
@@ -57,7 +57,6 @@ Rules for this direction:
 | Module | Responsibility |
 |---|---|
 | `scripts.run.main` | Main batch over datasets and different evidence. |
-| `scripts.run.main_single_run` | Small run with a fixed dataset and evidence. |
 | `scripts.run.run_evidence_pos` | One evidence per node to study its position in the DAG. |
 | `scripts.run.synthetic_eval` | Controlled evaluation with a synthetic network. |
 | `scripts.run.get_mpe` | Exact Max-Product benchmark versus greedy decoding. |
@@ -82,7 +81,7 @@ The flow starts in `scripts/run/main.py`.
 ```text
 main
  ├─ creates ExperimentConfig
- ├─ selects the client with experiment.llm_factory.build_llm_fn
+ ├─ selects the client with llm.providers.build_llm_fn
  └─ for each dataset
      ├─ resolves paths via paths.py
      ├─ loads the numeric network with io.loaders.load_network
@@ -92,13 +91,13 @@ main
          ├─ computes the reference with Max-Product
          ├─ queries the compiled messages with mpe.infer
          ├─ computes hits with evaluation.metrics
-         └─ writes JSONL with logging.experiment_logger
+         └─ writes JSONL with experiment.logging
 ```
 
 ### 4.1 Numeric loading
 
 `io.loaders.load_network(path)` selects a pgmpy reader, decompresses the file
-when necessary, and calls `core.conversion.convert_pgmpy_model`.
+when necessary, and calls `io.loaders.convert_pgmpy_model`.
 
 The result is always a `models.BayesianNetwork` containing:
 
@@ -125,7 +124,7 @@ The batch only generates configurations. Running a configuration belongs to
 
 `run_experiment` executes:
 
-1. `experiment.experiment.run_max_product`, using the numeric engine;
+1. `inference.engine.run_max_product`, using the numeric engine;
 2. `mpe.infer.infer_from_compiled`, using the semantic tables;
 3. `evaluation.metrics.count_llm_hits`, comparing assignments;
 4. assembly of a serializable record for the logger.
@@ -140,13 +139,10 @@ query variables are evaluated.
 - `models.Variable`: name and canonical `states` tuple;
 - `models.Factor`: ordered scope and NumPy tensor;
 - `models.BayesianNetwork`: collection of variables, factors, and topology;
-- `inference.InferenceEngine`: validates the query and coordinates elimination;
-- `inference.ve_algorithm`: reduces evidence, chooses order, and eliminates
-  variables;
-- `strategies.SumProductStrategy`: eliminates by sum;
-- `strategies.MaxProductStrategy`: eliminates by max and keeps argmax;
-- `inference.postprocessing`: normalizes distributions or reconstructs the
-  MAP/MPE.
+- `inference.engine`: validates queries, reduces evidence, chooses the order,
+  eliminates variables, and normalizes or reconstructs results;
+- `inference.strategies.SumProductStrategy`: eliminates by sum;
+- `inference.strategies.MaxProductStrategy`: eliminates by max and keeps argmax.
 
 ### Factor convention
 
@@ -188,8 +184,24 @@ must be a DAG.
 
 ### 6.2 Compilation
 
-`mpe.compile.compile_semantic_messages` is the sole main step that calls the
-LLM. It:
+`mpe.compile.compile_semantic_messages` coordinates preparation and compilation.
+The modules have these responsibilities:
+
+- `pre_compile_phase.metadata`: load or generate variable metadata; when a
+  BIF is supplied, use `io.loaders.parse_bif` to read its structure without CPTs;
+- `pre_compile_phase.relationships`: load or generate qualitative notes;
+- `pre_compile_phase.briefing`: prepare semantic context and request the briefing;
+- `compile_phase.buckets`: enumerate contexts, compile decisions, validate
+  coverage, and propagate messages;
+- `compile_phase.prompts`: build bucket prompts from prepared context;
+- `compile_phase.client` and `domain_scoring`: preserve request, retry, parsing,
+  and score-extraction behavior;
+- `state_semantics`: shared interpretation of states for briefing and buckets;
+- `normalization`: canonical names, states, and context keys for both phases.
+
+The coordinator keeps `CompiledSemanticMessages` at its original module path
+for pickle compatibility and imports the phase implementations only when
+compilation is requested. The sequence remains:
 
 1. uses the semantic BIF network or the in-memory network;
 2. loads or generates variable metadata;
@@ -204,7 +216,8 @@ LLM. It:
 10. requests token log-probabilities over short categorical state codes when
     the provider supports them;
 11. converts those codes back to canonical `Variable.states` and stores one
-    `SemanticMessage` per variable.
+    `SemanticMessage` per variable, consuming incoming messages and publishing
+    the new one for subsequent buckets.
 
 The resulting object is `CompiledSemanticMessages`, containing messages,
 order, briefing, network, aliases, metadata, notes, traces, and schema
@@ -216,15 +229,20 @@ it may also be `None` when the provider omits log-probabilities.
 
 ### 6.3 Current compilation invariant
 
-The current code compiles with `evidence={}` and keeps `active_messages`
-empty. This means each message is a local table of the variable conditioned
-on its structural separator — usually its parents — and that derived messages
-are not propagated between buckets during compilation.
+Compilation uses `evidence={}` and reverse topological order. For each
+variable, the bucket receives active messages whose scope contains that
+variable. Its separator combines the local family with the incoming scopes,
+then excludes the variable being eliminated. Incoming messages are consumed
+and the new message is published for subsequent buckets.
 
-This is an important decision: the implemented behavior is a tabulated,
-causal semantic decoding, not a numeric bucket-elimination run. Do not
-introduce message propagation or LLM auditing in the online phase as a
-"refactor"; this would change the scientific method.
+This propagation can enlarge a separator beyond the variable's parents.
+Every separator configuration is compiled, splitting calls as needed.
+Messages remain `evidence_driven=False` because compilation has no evidence.
+The compiler, prompts, propagation, and context ordering are preserved by the
+structural simplification.
+
+These are qualitative semantic messages, not numeric factor products. Online
+inference does not propagate new messages or call an LLM when evidence changes.
 
 ### 6.4 Online inference
 
@@ -240,9 +258,22 @@ introduce message propagation or LLM auditing in the online phase as a
 There is no LLM call in this step. Reconstruction is deterministic for a
 given compilation and evidence.
 
+Importing the online API or loading a valid compiled pickle does not import
+`pre_compile_phase` or `compile_phase`. Context lookup uses `normalization`
+instead of depending on bucket construction or prompt builders.
+
 Consequence of the current algorithm: evidence on a descendant does not
 trigger a new retroactive semantic inference on its ancestors. Any change to
 this is an algorithmic change, not a code reorganization.
+
+### 6.5 Provider contracts
+
+`llm.providers` selects the remote, local, or mock callable used for metadata
+and relationship generation. `mpe.compile_phase.client.LLMJsonClient` handles briefing and
+bucket responses with its own validation, retries, and optional log-probs.
+These clients intentionally retain different request parameters and parsers.
+Selecting the metadata mock alone does not mock `LLMJsonClient`; tests replace
+both paths and block HTTP requests.
 
 ## 7. Cache
 
@@ -271,7 +302,7 @@ consume credits:
 
 ## 8. Analysis and logging
 
-`logging.experiment_logger` writes one JSON object per line. The path comes
+`experiment.logging` writes one JSON object per line. The path comes
 from `PGM_LOG_FILE_NAME`.
 
 Responsibilities of the `analysis/` layer:
@@ -343,8 +374,8 @@ root inside each script.
 
 ## 11. Extension points
 
-- New network format: `io/loaders.py` and `core/conversion.py`.
-- New numeric strategy: implement `strategies.base.EliminationStrategy`.
+- New network format: `io/loaders.py`.
+- New numeric strategy: implement `inference.strategies.EliminationStrategy`.
 - New sampling: `experiment/sampling.py` and the `batch.py` dispatcher.
 - New metric: pure calculation in `evaluation/` or `analysis/`, presented in
   the corresponding script.
@@ -365,3 +396,40 @@ root inside each script.
 - compiled inference never calls the LLM;
 - incompatible caches are not used silently;
 - analyses normalize names with and without the `.bif` suffix.
+
+## 13. Consolidated module paths
+
+The main entry point and package-root numeric API remain available. Internal
+callers use these paths; removed modules are not retained as forwarding wrappers.
+
+| Previous module | Current location |
+|---|---|
+| `inference.ve_algorithm`, `inference.postprocessing` | `inference.engine` |
+| `strategies.base`, `strategies.sum_product`, `strategies.max_product` | `inference.strategies` |
+| `strategies.llm.openai`, `strategies.llm.local`, `experiment.llm_factory` | `llm.providers` |
+| `strategies.llm.parsing` | `llm.parsing` |
+| `experiment.experiment` (used numeric helpers) | `inference.engine` |
+| `logging.experiment_logger` (JSONL) | `experiment.logging` |
+| `core.conversion` | `io.loaders` |
+| `mpe.reconstruction` | `mpe.infer` |
+| `mpe.metadata_generation`, metadata loading helpers | `mpe.pre_compile_phase.metadata` |
+| `mpe.relationship_generation`, relationship loading helpers | `mpe.pre_compile_phase.relationships` |
+| `mpe.prompt_builders` (briefing and shared context) | `mpe.pre_compile_phase.briefing` |
+| `mpe.prompt_builders` (bucket prompts) | `mpe.compile_phase.prompts` |
+| `mpe.bucket`, context enumeration, bucket compilation loop | `mpe.compile_phase.buckets` |
+| `mpe.client`, `mpe.domain_scoring` | Corresponding modules in `mpe.compile_phase` |
+| `mpe.io` (structural BIF parsing) | `io.loaders.parse_bif` |
+| `mpe.io` (normalization), bucket context keys | `mpe.normalization` |
+
+Unused wrappers and helpers were removed: `run_single_mpe_experiment`,
+`run_sum_product`, `extract_argmax_from_factor`, `log_experiment_csv`,
+`parse_assignment_arg`, `states_pipe`, `get_node_depth_table`, and
+`get_factor_value`. The unused sampling arguments `bias_toward` and `bias_prob`
+were also removed. Batch generation, RNG consumption, and numeric ordering
+remain unchanged.
+
+`CompiledSemanticMessages`, the canonical network models, and the message
+schemas retain their original module paths. Cache schema version 5 and cache
+filenames are unchanged, so this consolidation does not require migration or
+recompilation. The existing compilation behavior is the reference, including
+message propagation that older documentation incorrectly described as absent.

@@ -1,5 +1,5 @@
 """
-metadata_generation.py
+pre_compile_phase/metadata.py
 =======================
 Geração via LLM de metadados qualitativos por variável (display_name,
 expert_note e state_meanings), persistidos uma vez por dataset.
@@ -10,38 +10,44 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ...core.config import InferenceConfig
+from ...io.loaders import parse_bif
+
 from pydantic import BaseModel
 
-from .types import VariableMetadata
-from ..models import BayesianNetwork
+from ..types import VariableMetadata
+from ...models import BayesianNetwork
 
 # ---- Modelos de saída ----
+
 
 class NetworkMetadataResponse(BaseModel):
     metadata: dict[str, VariableMetadata]
 
+
 # ---- Prompt builder ----
+
 
 def build_metadata_generation_prompt(bn: BayesianNetwork) -> str:
     """
     Build a prompt that instructs an LLM to generate structured metadata
     for every variable in the given Bayesian Network.
- 
+
     The returned prompt is a self-contained instruction string suitable for
     use as the sole user message to a capable chat-completion model.  The
     expected model output is a single JSON object — one key per variable —
     matching the schema described inside the prompt.
- 
+
     Args:
         bn: A BayesianNetwork instance whose `variables`, `parents`, and
             `children_map` properties are fully populated.
- 
+
     Returns:
         A string prompt ready to be sent to an LLM.
     """
     parents_map: dict[str, tuple[str, ...]] = bn.parents
     children_map: dict[str, tuple[str, ...]] = bn.children_map()
- 
+
     # ------------------------------------------------------------------ #
     # Build a structured variable table to embed in the prompt             #
     # ------------------------------------------------------------------ #
@@ -49,7 +55,7 @@ def build_metadata_generation_prompt(bn: BayesianNetwork) -> str:
     for name, var in bn.variables.items():
         var_parents = parents_map.get(name, ())
         var_children = children_map.get(name, ())
- 
+
         if not var_parents and var_children:
             role = "root (no parents; exogenous driver)"
         elif var_parents and not var_children:
@@ -58,11 +64,11 @@ def build_metadata_generation_prompt(bn: BayesianNetwork) -> str:
             role = "intermediate (has both parents and children)"
         else:
             role = "isolated (no edges)"
- 
+
         domain_str = ", ".join(f'"{s}"' for s in var.states)
         parents_str = ", ".join(var_parents) if var_parents else "—"
         children_str = ", ".join(var_children) if var_children else "—"
- 
+
         var_lines.append(
             f"  {name}\n"
             f"    domain   : [{domain_str}]\n"
@@ -70,10 +76,10 @@ def build_metadata_generation_prompt(bn: BayesianNetwork) -> str:
             f"    parents  : {parents_str}\n"
             f"    children : {children_str}"
         )
- 
+
     variables_section = "\n\n".join(var_lines)
     n = len(bn.variables)
- 
+
     # ------------------------------------------------------------------ #
     # Compose the prompt                                                   #
     # ------------------------------------------------------------------ #
@@ -254,22 +260,20 @@ HARD CONSTRAINTS
 """
     return prompt
 
+
 # ---- Função principal ----
- 
+
+
 def generate_metadata_with_llm(
     bn,
     llm_fn,
     output_path: Path | None = None,
 ) -> dict:
-    
     prompt = build_metadata_generation_prompt(bn)
     response = llm_fn(prompt, NetworkMetadataResponse)
- 
-    metadata_dict = {
-        var: meta.model_dump()
-        for var, meta in response.metadata.items()
-    }
- 
+
+    metadata_dict = {var: meta.model_dump() for var, meta in response.metadata.items()}
+
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
@@ -277,5 +281,57 @@ def generate_metadata_with_llm(
             encoding="utf-8",
         )
         print(f"Metadata salvo em: {output_path}")
- 
+
     return metadata_dict
+
+
+def load_metadata(path: Path | None, bn: BayesianNetwork) -> dict[str, VariableMetadata]:
+    if path is None:
+        return {}
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Metadata JSON must be an object keyed by BIF variable ID.")
+
+    metadata: dict[str, VariableMetadata] = {}
+    for variable, raw_metadata in payload.items():
+        if variable not in bn.variables:
+            raise ValueError(f"Metadata references unknown variable {variable}.")
+        metadata[variable] = VariableMetadata.model_validate(raw_metadata)
+    return metadata
+
+
+def load_or_generate_metadata(
+    network: BayesianNetwork,
+    bif_path: Path | None,
+    metadata_path: Path | None,
+    llm_fn,
+    config: InferenceConfig,
+) -> tuple[BayesianNetwork, dict[str, VariableMetadata]]:
+    # Dataset experiments may keep using the lightweight BIF parser. Small
+    # applications can provide an in-memory CPT-less network directly.
+    bn = parse_bif(bif_path) if bif_path is not None else network
+
+    if config.show_input_data:
+        print("\n[COMPILE] Carregando metadados da rede...")
+
+    if metadata_path is None or not metadata_path.exists():
+        if config.show_input_data:
+            print("  → Gerando metadados via LLM (arquivo não encontrado)...")
+        generated = generate_metadata_with_llm(
+            bn=bn,
+            llm_fn=llm_fn,
+            output_path=metadata_path,
+        )
+        metadata = {}
+        for variable, raw_metadata in generated.items():
+            if variable not in bn.variables:
+                raise ValueError(f"Metadata references unknown variable {variable}.")
+            metadata[variable] = VariableMetadata.model_validate(raw_metadata)
+    else:
+        metadata = load_metadata(metadata_path, bn)
+
+    if config.show_input_data:
+        print(f"  ✓ Metadados carregados: {len(metadata)} entradas")
+
+    return bn, metadata

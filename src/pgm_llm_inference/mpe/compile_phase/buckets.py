@@ -1,34 +1,58 @@
-"""
-mpe/bucket.py
-=============
-Lógica de bucket elimination semântico.
-
-Responsável por:
-- Construir BucketSpec a partir do estado corrente da eliminação
-- Verificar pressão de evidência sobre um bucket
-- Normalizar contextos recebidos do LLM (aliases, case)
-- Converter BucketResponse → SemanticMessage (com validação completa)
-"""
+"""Construct, compile, validate, and propagate semantic bucket messages."""
 
 from __future__ import annotations
 
-from .graph import evidence_context_payload
-from .io import resolve_variable
-from .prompt_builders import generate_context_rows
-from ..models import BayesianNetwork
-from .types import (
+import itertools
+from typing import TYPE_CHECKING
+
+from ...core.config import InferenceConfig
+from ...models import BayesianNetwork
+from ..graph import evidence_context_payload
+from ..normalization import context_key, normalize_context, resolve_variable
+from ..types import (
+    BriefingResponse,
     BucketResponse,
     BucketSpec,
     ContextDecision,
     ContextEvidenceMessage,
     MessageRow,
+    PromptTrace,
     SemanticMessage,
+    VariableMetadata,
 )
+from .prompts import build_bucket_prompt
+
+if TYPE_CHECKING:
+    from .client import LLMJsonClient
 
 
-# ---------------------------------------------------------------------------
-# Construção do BucketSpec
-# ---------------------------------------------------------------------------
+def generate_context_rows(
+    variables: tuple[str, ...],
+    bn: BayesianNetwork,
+    evidence: dict[str, str],
+    max_context_rows: int,
+) -> list[dict[str, str]]:
+    if not variables:
+        return [{}]
+
+    domains: list[tuple[str, ...]] = []
+    for variable in variables:
+        if variable in evidence:
+            domains.append((evidence[variable],))
+        else:
+            domains.append(bn.variables[variable].states)
+
+    total_rows = 1
+    for domain in domains:
+        total_rows *= len(domain)
+    if total_rows > max_context_rows:
+        raise ValueError(
+            f"Bucket context would contain {total_rows} rows for variables "
+            f"{variables}, exceeding max_context_rows={max_context_rows}."
+        )
+
+    return [dict(zip(variables, values, strict=True)) for values in itertools.product(*domains)]
+
 
 def build_bucket_spec(
     variable: str,
@@ -38,17 +62,13 @@ def build_bucket_spec(
     order_index: dict[str, int],
     max_context_rows: int,
 ) -> BucketSpec:
-    incoming_messages = [
-        message for message in active_messages if variable in message.scope
-    ]
+    incoming_messages = [message for message in active_messages if variable in message.scope]
 
     bucket_scope = {variable, *bn.parents[variable]}
     for message in incoming_messages:
         bucket_scope.update(message.scope)
 
-    separator = tuple(
-        sorted(bucket_scope - {variable}, key=lambda item: order_index[item])
-    )
+    separator = tuple(sorted(bucket_scope - {variable}, key=lambda item: order_index[item]))
     context_rows = generate_context_rows(
         separator,
         bn=bn,
@@ -69,10 +89,6 @@ def build_bucket_spec(
     )
 
 
-# ---------------------------------------------------------------------------
-# Pressão de evidência
-# ---------------------------------------------------------------------------
-
 def bucket_has_evidence_pressure(
     bucket: BucketSpec,
     bn: BayesianNetwork,
@@ -86,52 +102,6 @@ def bucket_has_evidence_pressure(
     )
 
 
-# ---------------------------------------------------------------------------
-# Normalização de contexto
-# ---------------------------------------------------------------------------
-
-def normalize_context(
-    raw_context: dict[str, str],
-    expected_scope: tuple[str, ...],
-    bn: BayesianNetwork,
-    alias_map: dict[str, str],
-) -> dict[str, str]:
-    normalized: dict[str, str] = {}
-    expected_set = set(expected_scope)
-
-    for raw_variable, raw_state in raw_context.items():
-        variable = resolve_variable(raw_variable, alias_map)
-
-        if variable not in expected_set:
-            raise ValueError(
-                f"Unexpected context variable {raw_variable!r}; "
-                f"expected {expected_scope}."
-            )
-
-        domain = bn.variables[variable].states
-        domain_upper = {state.upper(): state for state in domain}
-        canonical = domain_upper.get(raw_state.strip().upper())
-
-        if canonical is None:
-            allowed = ", ".join(domain)
-            raise ValueError(
-                f"Illegal state {raw_state!r} for {variable}. "
-                f"Allowed states: {allowed}."
-            )
-
-        normalized[variable] = canonical
-
-    missing = expected_set - set(normalized)
-    if missing:
-        raise ValueError(f"Context is missing variables: {sorted(missing)}.")
-
-    return {variable: normalized[variable] for variable in expected_scope}
-
-
-def context_key(context: dict[str, str], scope: tuple[str, ...]) -> tuple[str, ...]:
-    return tuple(context[variable] for variable in scope)
-
-
 def contexts_match(
     rows: list[dict[str, str]],
     expected_rows: list[dict[str, str]],
@@ -143,10 +113,6 @@ def contexts_match(
         context_key(row, scope) for row in expected_rows
     }
 
-
-# ---------------------------------------------------------------------------
-# BucketResponse → SemanticMessage
-# ---------------------------------------------------------------------------
 
 def semantic_message_from_response(
     response: BucketResponse,
@@ -284,6 +250,7 @@ def semantic_message_from_response(
         ],
     )
 
+
 def split_bucket_by_context_rows(
     bucket: BucketSpec,
     max_context_rows_per_call: int,
@@ -304,7 +271,7 @@ def split_bucket_by_context_rows(
         return [bucket]
 
     batches = [
-        rows[i:i + max_context_rows_per_call]
+        rows[i : i + max_context_rows_per_call]
         for i in range(0, len(rows), max_context_rows_per_call)
     ]
     return [bucket.model_copy(update={"context_rows": batch}) for batch in batches]
@@ -339,3 +306,111 @@ def merge_bucket_responses(
         observed_value=observed_value,
         messages=merged_messages,
     )
+
+
+def compile_bucket_messages(
+    *,
+    bn: BayesianNetwork,
+    metadata: dict[str, VariableMetadata],
+    relationship_notes: dict[str, tuple[str, ...]],
+    alias_map: dict[str, str],
+    briefing: BriefingResponse,
+    elimination_order: list[str],
+    client: LLMJsonClient,
+    config: InferenceConfig,
+    max_context_rows: int,
+    max_context_rows_per_call: int,
+) -> tuple[dict[str, SemanticMessage], list[PromptTrace]]:
+    """Compile all separator rows and preserve reverse-topological propagation."""
+    compile_evidence: dict[str, str] = {}
+    order_index = {variable: index for index, variable in enumerate(reversed(elimination_order))}
+    total_vars = len(elimination_order)
+    traces: list[PromptTrace] = []
+    messages: dict[str, SemanticMessage] = {}
+    active_messages: list[SemanticMessage] = []
+
+    for var_index, variable in enumerate(elimination_order, start=1):
+        if config.show_input_data:
+            print(f"  [{var_index:02d}/{total_vars:02d}] Bucket: {variable}")
+
+        bucket = build_bucket_spec(
+            variable=variable,
+            bn=bn,
+            evidence=compile_evidence,
+            active_messages=active_messages,
+            order_index=order_index,
+            max_context_rows=max_context_rows,
+        )
+
+        def _make_validator(bkt, am):
+            def _validate(model: BucketResponse) -> None:
+                semantic_message_from_response(
+                    model, bkt, bn=bn, alias_map=am, evidence=compile_evidence
+                )
+
+            return _validate
+
+        sub_buckets = split_bucket_by_context_rows(bucket, max_context_rows_per_call)
+
+        if config.show_input_data and len(sub_buckets) > 1:
+            print(
+                f"         → {len(bucket.context_rows)} linhas de contexto, "
+                f"dividido em {len(sub_buckets)} chamadas "
+                f"(máx. {max_context_rows_per_call} linhas/chamada)"
+            )
+
+        responses: list[BucketResponse] = []
+        for sub_bucket in sub_buckets:
+            prompt = build_bucket_prompt(
+                sub_bucket, bn, metadata, briefing, compile_evidence, relationship_notes
+            )
+            response, trace = client.complete_json(
+                purpose="bucket_argmax",
+                variable=variable,
+                prompt=prompt,
+                response_model=BucketResponse,
+                semantic_validator=_make_validator(sub_bucket, alias_map),
+                candidate_states=(
+                    bn.variables[variable].states if not sub_bucket.is_evidence else None
+                ),
+            )
+            traces.append(trace)
+            responses.append(response)
+
+        response = (
+            responses[0] if len(responses) == 1 else merge_bucket_responses(responses, variable)
+        )
+
+        message = semantic_message_from_response(
+            response, bucket, bn=bn, alias_map=alias_map, evidence=compile_evidence
+        )
+
+        if config.show_input_data:
+            print(
+                f"         → evidence_driven={message.evidence_driven} "
+                f"| scope={message.scope} "
+                f"| rows={len(message.rows)}"
+            )
+
+        if message.evidence_driven:
+            raise RuntimeError(
+                f"[COMPILE] Invariante violada: {variable} retornou "
+                "evidence_driven=True com evidence={}. "
+                "Verifique bucket_has_evidence_pressure."
+            )
+
+        messages[variable] = message
+
+        # consumir as mensagens que entraram neste bucket e publicar a nova
+        consumed_ids = {id(m) for m in bucket.incoming_messages}
+        active_messages = [m for m in active_messages if id(m) not in consumed_ids]
+        active_messages.append(message)
+
+    if config.show_input_data:
+        print(
+            f"\n[COMPILE] ✓ Compilação concluída: "
+            f"{len(messages)} mensagens, "
+            f"{sum(len(m.rows) for m in messages.values())} rows totais"
+        )
+
+    return messages, traces

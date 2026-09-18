@@ -1,0 +1,2380 @@
+{
+  "prompt_hashes": [
+    [
+      "NetworkMetadataResponse",
+      "95129abcb14e97db3a22651f802b259519a75b7ceaddb230e0daffc26a538507"
+    ],
+    [
+      "NetworkRelationshipResponse",
+      "b2301ec85c44fb979929e9d86b682a7a906ddb704eced34be548c82d57926e99"
+    ],
+    [
+      "network_briefing",
+      "9e973056c346bb74891d53be58fb29296e5ebd97b26e44611c2eaea565638092"
+    ],
+    [
+      "bucket_argmax",
+      "be98edfbfaff4ca6ad8a2569d76d08815ca09282308052c7c54417abc0b14981"
+    ],
+    [
+      "bucket_argmax",
+      "72158dfc5f631ed041e6a43d8dbe119d98d8e78da19dc4a88ee5cda4cea10a8b"
+    ],
+    [
+      "bucket_argmax",
+      "c6475c6e3eb87de671601f4e12da82974bf06121483618c6890622d04ee1d039"
+    ],
+    [
+      "bucket_argmax",
+      "05d5bada20ba1b79a779d256e9d69064bf4613747e91f988e367d146c60aac6f"
+    ],
+    [
+      "bucket_argmax",
+      "f0c16812ae9002d907002d7f2e85f0ca930fc9334df893af7fd816bb2e942f38"
+    ]
+  ],
+  "order": [
+    "D",
+    "C",
+    "B",
+    "A"
+  ],
+  "messages": {
+    "D": {
+      "source_variable": "D",
+      "scope": [
+        "C"
+      ],
+      "is_evidence": false,
+      "evidence_driven": false,
+      "rows": [
+        {
+          "context": {
+            "C": "off"
+          },
+          "selected_value": "off",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        },
+        {
+          "context": {
+            "C": "on"
+          },
+          "selected_value": "on",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "C": {
+      "source_variable": "C",
+      "scope": [
+        "A",
+        "B"
+      ],
+      "is_evidence": false,
+      "evidence_driven": false,
+      "rows": [
+        {
+          "context": {
+            "A": "off",
+            "B": "off"
+          },
+          "selected_value": "off",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        },
+        {
+          "context": {
+            "A": "off",
+            "B": "on"
+          },
+          "selected_value": "on",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        },
+        {
+          "context": {
+            "A": "on",
+            "B": "off"
+          },
+          "selected_value": "on",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        },
+        {
+          "context": {
+            "A": "on",
+            "B": "on"
+          },
+          "selected_value": "off",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "B": {
+      "source_variable": "B",
+      "scope": [
+        "A"
+      ],
+      "is_evidence": false,
+      "evidence_driven": false,
+      "rows": [
+        {
+          "context": {
+            "A": "off"
+          },
+          "selected_value": "off",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        },
+        {
+          "context": {
+            "A": "on"
+          },
+          "selected_value": "on",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "A": {
+      "source_variable": "A",
+      "scope": [],
+      "is_evidence": false,
+      "evidence_driven": false,
+      "rows": [
+        {
+          "context": {},
+          "selected_value": "off",
+          "observed_value": null,
+          "compatibility": null,
+          "confidence": "low",
+          "rationale": "Controlled response",
+          "domain_scores": {
+            "by_state": {
+              "off": -0.3,
+              "on": -1.4
+            },
+            "default_score": 0.0
+          },
+          "token_scores": {
+            "selected_token": {
+              "token": "A",
+              "logprob": -0.3
+            },
+            "top_logprobs": [
+              {
+                "token": "B",
+                "logprob": -1.4
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "inference": [
+    [
+      {
+        "A": "off",
+        "B": "off",
+        "C": "off",
+        "D": "off"
+      },
+      {
+        "A": [
+          "off",
+          "low"
+        ],
+        "B": [
+          "off",
+          "low"
+        ],
+        "C": [
+          "off",
+          "low"
+        ],
+        "D": [
+          "off",
+          "low"
+        ]
+      },
+      {
+        "D": [
+          {
+            "context": {
+              "C": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "C": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "B": [
+          {
+            "context": {
+              "A": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "A": [
+          {
+            "context": {},
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "B": "on",
+        "C": "off",
+        "D": "off"
+      },
+      {
+        "B": [
+          "on",
+          "low"
+        ],
+        "C": [
+          "off",
+          "low"
+        ],
+        "D": [
+          "off",
+          "low"
+        ]
+      },
+      {
+        "D": [
+          {
+            "context": {
+              "C": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "C": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "B": [
+          {
+            "context": {
+              "A": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "A": "off",
+        "B": "off",
+        "C": "off"
+      },
+      {
+        "A": [
+          "off",
+          "low"
+        ],
+        "B": [
+          "off",
+          "low"
+        ],
+        "C": [
+          "off",
+          "low"
+        ]
+      },
+      {
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "B": [
+          {
+            "context": {
+              "A": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "A": [
+          {
+            "context": {},
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "B": "on",
+        "C": "off",
+        "D": "off"
+      },
+      {
+        "B": [
+          "on",
+          "low"
+        ],
+        "C": [
+          "off",
+          "low"
+        ],
+        "D": [
+          "off",
+          "low"
+        ]
+      },
+      {
+        "D": [
+          {
+            "context": {
+              "C": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "C": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "B": [
+          {
+            "context": {
+              "A": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {},
+      {},
+      {}
+    ]
+  ],
+  "batches": {
+    "mpe/mpe_consistent": [
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "off"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "off",
+          "A": "off"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "off"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "off",
+          "A": "off"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "off"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "off",
+          "A": "off"
+        },
+        "query_vars": null
+      }
+    ],
+    "mpe/mpe_inconsistent": [
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on",
+          "A": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on",
+          "A": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on",
+          "A": "on"
+        },
+        "query_vars": null
+      }
+    ],
+    "mpe/random": [
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on",
+          "A": "off"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on",
+          "B": "off"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on"
+        },
+        "query_vars": null
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on",
+          "D": "off"
+        },
+        "query_vars": null
+      }
+    ],
+    "map/mpe_consistent": [
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": [
+          "A"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": [
+          "B",
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "off"
+        },
+        "query_vars": [
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "off"
+        },
+        "query_vars": [
+          "D",
+          "A"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "off",
+          "A": "off"
+        },
+        "query_vars": [
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "off",
+          "A": "off"
+        },
+        "query_vars": [
+          "B",
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "off"
+        },
+        "query_vars": [
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "off"
+        },
+        "query_vars": [
+          "A",
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "off",
+          "A": "off"
+        },
+        "query_vars": [
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "off",
+          "A": "off"
+        },
+        "query_vars": [
+          "C",
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "off"
+        },
+        "query_vars": [
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "off"
+        },
+        "query_vars": [
+          "D",
+          "A"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "off",
+          "A": "off"
+        },
+        "query_vars": [
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "off",
+          "A": "off"
+        },
+        "query_vars": [
+          "D",
+          "C"
+        ]
+      }
+    ],
+    "map/mpe_inconsistent": [
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": [
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": [
+          "B",
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on"
+        },
+        "query_vars": [
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on"
+        },
+        "query_vars": [
+          "A",
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on",
+          "A": "on"
+        },
+        "query_vars": [
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on",
+          "A": "on"
+        },
+        "query_vars": [
+          "D",
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on"
+        },
+        "query_vars": [
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on"
+        },
+        "query_vars": [
+          "A",
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on",
+          "A": "on"
+        },
+        "query_vars": [
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on",
+          "A": "on"
+        },
+        "query_vars": [
+          "C",
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on"
+        },
+        "query_vars": [
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on"
+        },
+        "query_vars": [
+          "C",
+          "A"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on",
+          "A": "on"
+        },
+        "query_vars": [
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on",
+          "A": "on"
+        },
+        "query_vars": [
+          "C",
+          "D"
+        ]
+      }
+    ],
+    "map/random": [
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": [
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {},
+        "query_vars": [
+          "C",
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on"
+        },
+        "query_vars": [
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on"
+        },
+        "query_vars": [
+          "A",
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on",
+          "A": "off"
+        },
+        "query_vars": [
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "D": "on",
+          "A": "off"
+        },
+        "query_vars": [
+          "C",
+          "B"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on"
+        },
+        "query_vars": [
+          "A"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on"
+        },
+        "query_vars": [
+          "B",
+          "A"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on",
+          "B": "off"
+        },
+        "query_vars": [
+          "A"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "C": "on",
+          "B": "off"
+        },
+        "query_vars": [
+          "A",
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on"
+        },
+        "query_vars": [
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on"
+        },
+        "query_vars": [
+          "A",
+          "D"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on",
+          "D": "off"
+        },
+        "query_vars": [
+          "C"
+        ]
+      },
+      {
+        "prompt_type": "variable_assignment",
+        "evidence": {
+          "B": "on",
+          "D": "off"
+        },
+        "query_vars": [
+          "C",
+          "A"
+        ]
+      }
+    ]
+  },
+  "jsonl": [
+    {
+      "evidence_length": 2,
+      "hits": 2,
+      "log_accuracy": 1.0,
+      "accuracy": "100.00%",
+      "prompt_type": "variable_assignment",
+      "context_type": null,
+      "dataset": "regression.bif",
+      "exact_match": 1,
+      "evidence_sampling": "mpe_consistent",
+      "model_name": "regression-model",
+      "evaluated_length": 2,
+      "evidence": {
+        "B": "off",
+        "A": "off"
+      },
+      "llm_predictions": {
+        "C": "off",
+        "D": "off"
+      },
+      "map_assignment": {
+        "_scalar": "value",
+        "C": "off",
+        "D": "off"
+      },
+      "confidence": {
+        "C": [
+          "off",
+          "low"
+        ],
+        "D": [
+          "off",
+          "low"
+        ]
+      },
+      "llm_cpt": {
+        "D": [
+          {
+            "context": {
+              "C": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "C": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      },
+      "timestamp": "2026-01-01T00:00:00"
+    },
+    {
+      "evidence_length": 2,
+      "hits": 0,
+      "log_accuracy": 0.0,
+      "accuracy": "0.00%",
+      "prompt_type": "variable_assignment",
+      "context_type": null,
+      "dataset": "regression.bif",
+      "exact_match": 0,
+      "evidence_sampling": "mpe_inconsistent",
+      "model_name": "regression-model",
+      "evaluated_length": 2,
+      "evidence": {
+        "B": "on",
+        "A": "on"
+      },
+      "llm_predictions": {
+        "C": "off",
+        "D": "off"
+      },
+      "map_assignment": {
+        "_scalar": "value",
+        "C": "on",
+        "D": "on"
+      },
+      "confidence": {
+        "C": [
+          "off",
+          "low"
+        ],
+        "D": [
+          "off",
+          "low"
+        ]
+      },
+      "llm_cpt": {
+        "D": [
+          {
+            "context": {
+              "C": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "C": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      },
+      "timestamp": "2026-01-01T00:00:00"
+    },
+    {
+      "evidence_length": 2,
+      "hits": 1,
+      "log_accuracy": 0.5,
+      "accuracy": "50.00%",
+      "prompt_type": "variable_assignment",
+      "context_type": null,
+      "dataset": "regression.bif",
+      "exact_match": 0,
+      "evidence_sampling": "random",
+      "model_name": "regression-model",
+      "evaluated_length": 2,
+      "evidence": {
+        "B": "on",
+        "D": "off"
+      },
+      "llm_predictions": {
+        "C": "on",
+        "A": "off"
+      },
+      "map_assignment": {
+        "_scalar": "value",
+        "C": "off",
+        "A": "off"
+      },
+      "confidence": {
+        "A": [
+          "off",
+          "low"
+        ],
+        "C": [
+          "on",
+          "low"
+        ]
+      },
+      "llm_cpt": {
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "A": [
+          {
+            "context": {},
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      },
+      "timestamp": "2026-01-01T00:00:00"
+    },
+    {
+      "evidence_length": 2,
+      "hits": 2,
+      "log_accuracy": 1.0,
+      "accuracy": "100.00%",
+      "prompt_type": "variable_assignment",
+      "context_type": null,
+      "dataset": "regression.bif",
+      "exact_match": 1,
+      "evidence_sampling": "mpe_consistent",
+      "model_name": "regression-model",
+      "evaluated_length": 2,
+      "evidence": {
+        "B": "off",
+        "A": "off"
+      },
+      "llm_predictions": {
+        "D": "off",
+        "C": "off"
+      },
+      "map_assignment": {
+        "_scalar": "value",
+        "C": "off",
+        "D": "off"
+      },
+      "confidence": {
+        "C": [
+          "off",
+          "low"
+        ],
+        "D": [
+          "off",
+          "low"
+        ]
+      },
+      "llm_cpt": {
+        "D": [
+          {
+            "context": {
+              "C": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "C": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      },
+      "timestamp": "2026-01-01T00:00:00"
+    },
+    {
+      "evidence_length": 2,
+      "hits": 0,
+      "log_accuracy": 0.0,
+      "accuracy": "0.00%",
+      "prompt_type": "variable_assignment",
+      "context_type": null,
+      "dataset": "regression.bif",
+      "exact_match": 0,
+      "evidence_sampling": "mpe_inconsistent",
+      "model_name": "regression-model",
+      "evaluated_length": 2,
+      "evidence": {
+        "B": "on",
+        "A": "on"
+      },
+      "llm_predictions": {
+        "C": "off",
+        "D": "off"
+      },
+      "map_assignment": {
+        "_scalar": "value",
+        "C": "on",
+        "D": "on"
+      },
+      "confidence": {
+        "C": [
+          "off",
+          "low"
+        ],
+        "D": [
+          "off",
+          "low"
+        ]
+      },
+      "llm_cpt": {
+        "D": [
+          {
+            "context": {
+              "C": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "C": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      },
+      "timestamp": "2026-01-01T00:00:00"
+    },
+    {
+      "evidence_length": 2,
+      "hits": 1,
+      "log_accuracy": 0.5,
+      "accuracy": "50.00%",
+      "prompt_type": "variable_assignment",
+      "context_type": null,
+      "dataset": "regression.bif",
+      "exact_match": 0,
+      "evidence_sampling": "random",
+      "model_name": "regression-model",
+      "evaluated_length": 2,
+      "evidence": {
+        "B": "on",
+        "D": "off"
+      },
+      "llm_predictions": {
+        "C": "on",
+        "A": "off"
+      },
+      "map_assignment": {
+        "_scalar": "value",
+        "C": "off",
+        "A": "off"
+      },
+      "confidence": {
+        "A": [
+          "off",
+          "low"
+        ],
+        "C": [
+          "on",
+          "low"
+        ]
+      },
+      "llm_cpt": {
+        "C": [
+          {
+            "context": {
+              "A": "off",
+              "B": "off"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "off",
+              "B": "on"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "off"
+            },
+            "selected_value": "on",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          },
+          {
+            "context": {
+              "A": "on",
+              "B": "on"
+            },
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ],
+        "A": [
+          {
+            "context": {},
+            "selected_value": "off",
+            "confidence": "low",
+            "rationale": "Controlled response",
+            "domain_scores": {
+              "by_state": {
+                "off": -0.3,
+                "on": -1.4
+              },
+              "default_score": 0.0
+            }
+          }
+        ]
+      },
+      "timestamp": "2026-01-01T00:00:00"
+    }
+  ],
+  "evidence_sizes": {
+    "0": [],
+    "1": [
+      1
+    ],
+    "10": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "11": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "30": [
+      1,
+      5,
+      9,
+      13,
+      17,
+      21,
+      25,
+      29,
+      30
+    ],
+    "100": [
+      1,
+      15,
+      29,
+      43,
+      57,
+      71,
+      85,
+      99,
+      100
+    ]
+  }
+}

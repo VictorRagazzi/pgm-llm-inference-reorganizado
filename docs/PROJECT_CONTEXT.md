@@ -155,9 +155,11 @@ names are rejected.
 In the current algorithm:
 
 - the compilation order is the reverse of the topological order;
-- `active_messages` remains empty;
-- a variable's context is essentially formed by its parents;
-- the LLM's choice is recorded for each configuration of those parents.
+- a bucket receives active messages whose scope contains its variable;
+- incoming scopes and the local family determine the separator;
+- consumed messages are removed and the new message is published;
+- the LLM's choice is recorded for every separator configuration;
+- all messages remain `evidence_driven=False` because compilation uses empty evidence.
 
 Therefore, the current compiled structure behaves like a set of conditional
 semantic decision tables.
@@ -176,11 +178,10 @@ cost.
 
 ### 4.4 Important conceptual limit
 
-Despite the LLM-MPE terminology and the inspiration from maximization
-circuits, the current code does not implement the full propagation of
-derived factors from a numeric bucket elimination. In particular, evidence on
-descendants does not retroactively recompute the semantic choices of
-ancestors.
+Compilation propagates qualitative messages between buckets, but these are
+not numeric factor products. Online inference only looks up the compiled
+decisions. Evidence on descendants does not retroactively recompute the
+semantic choices of ancestors.
 
 This should be treated as a property of the method being evaluated, not
 hidden by the documentation. Implementing bidirectional propagation, online
@@ -372,8 +373,7 @@ experiments.
 
 ## 12. Historical conceptual documents
 
-The files `semantic-maximizing-circuits.md` and `online-phase-mpe.md`
-describe the motivation based on maximization circuits and a conceptual
-formulation of online propagation. They are useful as theoretical history,
-but this document and the code are the reference for the currently
-implemented behavior.
+The file `semantic-maximizing-circuits.md` describes the motivation based on
+maximization circuits and a conceptual formulation of online propagation.
+It is useful as theoretical history, but this document and the code are the
+reference for the currently implemented behavior.

@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from pgm_llm_inference.experiment.experiment import get_hidden_vars, run_max_product
+from pgm_llm_inference.inference.engine import get_hidden_vars, run_max_product
 from pgm_llm_inference.io.loaders import load_network
 from pgm_llm_inference.models import BayesianNetwork
 from pgm_llm_inference.mpe.graph import topological_order

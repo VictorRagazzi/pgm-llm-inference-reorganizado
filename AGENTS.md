@@ -1,8 +1,8 @@
 # Instruções para agentes
 
 Este arquivo define como agentes de código devem trabalhar neste repositório.
-Leia também [ARCHITECTURE.md](ARCHITECTURE.md) e
-[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) antes de modificar o pipeline.
+Leia também [ARCHITECTURE.md](docs/ARCHITECTURE.md) e
+[PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) antes de modificar o pipeline.
 
 ## 1. Prioridades
 
@@ -36,7 +36,6 @@ tarefa atual.
 As seguintes ações podem chamar um LLM real e consumir créditos:
 
 - executar `scripts.run.main` sem um cache válido;
-- executar `scripts.run.main_single_run`;
 - executar `scripts.run.run_evidence_pos` sem as compilações necessárias;
 - executar `scripts.run.cptless_demo`;
 - chamar `compile_semantic_messages` ou `load_or_compile` em condições de cache
@@ -71,29 +70,48 @@ Não crie versões duplicadas desses modelos em outros pacotes.
 
 ### `core/`
 
-Contém operações matemáticas, conversão, ordenação e configuração de runtime.
+Contém operações matemáticas, ordenação e configuração de runtime.
 Não deve conhecer scripts, relatórios ou desenho de experimentos.
 
-### `inference/` e `strategies/`
+### `inference/`
 
-`InferenceEngine` orquestra Variable Elimination. Estratégias definem a operação
-de eliminação. Evite branches de estratégia dentro do motor quando o
-comportamento puder permanecer polimórfico.
+`engine.py` reúne Variable Elimination, reconstrução numérica e helpers de
+inferência exata. `strategies.py` define as operações de eliminação. Evite
+branches de estratégia dentro do motor quando o comportamento puder permanecer
+polimórfico.
+
+### `io/` e `llm/`
+
+`io/loaders.py` reúne carregamento e conversão para os modelos canônicos.
+`llm/providers.py` seleciona os clientes de metadados e relacionamentos;
+`llm/parsing.py` trata suas respostas. O cliente especializado da compilação
+fica em `mpe/compile_phase/client.py`, com seu próprio contrato de parsing e
+retentativas. `io.loaders.parse_bif` lê apenas a estrutura para o pipeline
+semântico, mantendo as CPTs fora desse caminho.
 
 ### `mpe/`
 
 Contém compilação e inferência semânticas. Preserve a separação:
 
+- `pre_compile_phase/` prepara metadados, notas e briefing;
+- `compile_phase/` constrói, compila, valida e propaga mensagens dos buckets;
+- `compile.py` coordena as fases e mantém `CompiledSemanticMessages` no caminho
+  usado pelos pickles; os schemas serializados permanecem em `types.py`;
+- `infer.py` faz lookup e reconstrução; normalização e chaves de contexto ficam
+  em `normalization.py`, sem depender das fases de preparação e compilação;
+- `state_semantics.py` é compartilhado pelo briefing e pelos prompts dos buckets;
+
 - compilação pode chamar LLM;
 - inferência compilada não chama LLM;
 - reconstrução é determinística;
+- compilação ocorre com evidência vazia e propaga mensagens entre buckets;
 - alterações em prompts ou schemas são mudanças de comportamento;
 - alterações serializadas exigem avaliar `COMPILED_SCHEMA_VERSION`.
 
 ### `experiment/`
 
-Contém configuração, amostragem, batches e comparação entre métodos. Não mova
-cálculos puros de fatores ou plotting para essa camada.
+Contém configuração, amostragem, batches, comparação entre métodos e logging
+JSONL. Não mova cálculos puros de fatores ou plotting para essa camada.
 
 ### `evaluation/` e `analysis/`
 
@@ -153,10 +171,9 @@ antigos podem deixar de ser diretamente comparáveis.
 2. Escolha a camada responsável antes de editar.
 3. Faça uma mudança coesa por vez.
 4. Acrescente ou adapte testes na mesma etapa.
-5. Rode primeiro os testes direcionados.
-6. Rode a validação completa.
-7. Revise `git diff --check` e `git status --short`.
-8. Atualize documentação quando caminhos, APIs, formatos ou comportamento
+5. Rode a validação completa.
+6. Revise `git diff --check` e `git status --short`.
+7. Atualize documentação quando caminhos, APIs, formatos ou comportamento
    mudarem.
 
 Para remover código morto, uma ausência de import no `__init__.py` não basta.

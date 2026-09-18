@@ -1,14 +1,12 @@
 import random
 from pgm_llm_inference.models import BayesianNetwork
-from pgm_llm_inference.experiment.experiment import run_max_product
+from pgm_llm_inference.inference.engine import run_max_product
 
 def sample_mpe_inconsistent_evidence(
     network,
     k: int,
     forbidden_vars: set[str] | None = None,
     rng: random.Random | None = None,
-    bias_toward: str = "leaves",
-    bias_prob: float = 1.0,
     max_retries: int = 10,
     seen: set[frozenset] | None = None,
 ) -> dict[str, str]:
@@ -21,7 +19,7 @@ def sample_mpe_inconsistent_evidence(
     seen = seen if seen is not None else set()
 
     for _ in range(max_retries):
-        result = _sample_once_inconsistent(network, k, forbidden_vars, rng, bias_toward, bias_prob)
+        result = _sample_once_inconsistent(network, k, forbidden_vars, rng)
         key = frozenset(result.items())
         if key not in seen:
             seen.add(key)
@@ -35,8 +33,6 @@ def _sample_once_inconsistent(
     k: int,
     forbidden_vars: set[str] | None = None,
     rng: random.Random | None = None,
-    bias_toward: str = "roots",
-    bias_prob: float = 1.0,
 ) -> dict[str, str]:
     rng = rng or random
     forbidden_vars = forbidden_vars or set()
@@ -194,15 +190,13 @@ def sample_mpe_consistent_evidence(
     k: int,
     forbidden_vars: set[str] | None = None,
     rng: random.Random | None = None,
-    bias_toward: str = "leaves",  # "roots" | "leaves" | "none"
-    bias_prob: float = 1,
-    max_retries: int = 10,  # <-- novo parâmetro
-    seen: set[frozenset] | None = None,  # <-- conjunto compartilhado entre chamadas
+    max_retries: int = 10,
+    seen: set[frozenset] | None = None,
 ) -> dict[str, str]:
     seen = seen if seen is not None else set()
 
     for _ in range(max_retries):
-        result = _sample_once(network, k, forbidden_vars, rng, bias_toward, bias_prob)
+        result = _sample_once(network, k, forbidden_vars, rng)
         key = frozenset(result.items())
         if key not in seen:
             seen.add(key)
@@ -216,8 +210,6 @@ def _sample_once(
     k: int,
     forbidden_vars: set[str] | None = None,
     rng: random.Random | None = None,
-    bias_toward: str = "roots",   # padrão agora é "roots"
-    bias_prob: float = 1.0,
 ) -> dict[str, str]:
     rng = rng or random
     forbidden_vars = forbidden_vars or set()

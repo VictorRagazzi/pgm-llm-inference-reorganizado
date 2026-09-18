@@ -1,7 +1,39 @@
+"""Numeric elimination strategies and Max-Product backpointers."""
+
+from abc import ABC, abstractmethod
 from typing import Any
-from .base import EliminationStrategy
-from ..models import Factor, Variable, BayesianNetwork
-from ..core.factor_ops import maximize_factor
+
+from ..models import BayesianNetwork, Factor, Variable
+from ..core.factor_ops import marginalize_factor, maximize_factor
+
+
+class EliminationStrategy(ABC):
+    @abstractmethod
+    def eliminate(
+        self,
+        factor: Factor,
+        variable: Variable,
+        context: dict[str, Any],
+    ) -> tuple[Factor, dict[str, Any]]:
+        pass
+
+    def reset(self) -> None:
+        """Optional hook called before a new inference query."""
+        pass
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+
+class SumProductStrategy(EliminationStrategy):
+    def eliminate(
+        self,
+        factor: Factor,
+        variable: Variable,
+        network: BayesianNetwork,
+        context: dict[str, Any],
+    ) -> tuple[Factor, dict[str, Any]]:
+        return marginalize_factor(factor, variable), {}
 
 
 class MaxProductStrategy(EliminationStrategy):

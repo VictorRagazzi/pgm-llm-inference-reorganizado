@@ -2,8 +2,8 @@ from typing import Any
 
 from pgm_llm_inference.evaluation.metrics import count_llm_hits
 from pgm_llm_inference.experiment.config import MPE, ExperimentConfig
-from pgm_llm_inference.experiment.experiment import get_hidden_vars, run_max_product
-from pgm_llm_inference.experiment.llm_factory import get_model_name
+from pgm_llm_inference.inference.engine import get_hidden_vars, run_max_product
+from pgm_llm_inference.llm.providers import get_model_name
 from pgm_llm_inference.mpe import CompiledSemanticMessages, infer_from_compiled
 
 

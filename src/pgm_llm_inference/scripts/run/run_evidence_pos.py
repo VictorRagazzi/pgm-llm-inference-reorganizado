@@ -36,10 +36,10 @@ import json
 
 from pgm_llm_inference.mpe.cache import load_or_compile
 from pgm_llm_inference.io.loaders import load_network
-from pgm_llm_inference.logging.experiment_logger import LOG_PATH, log_experiment
+from pgm_llm_inference.experiment.logging import LOG_PATH, log_experiment
 from pgm_llm_inference.experiment.config import ExperimentConfig, MPE
-from pgm_llm_inference.experiment.llm_factory import build_llm_fn, get_model_name
-from pgm_llm_inference.experiment.experiment import run_max_product, get_hidden_vars
+from pgm_llm_inference.llm.providers import build_llm_fn, get_model_name
+from pgm_llm_inference.inference.engine import run_max_product, get_hidden_vars
 from pgm_llm_inference.experiment.runner import run_experiment
 from pgm_llm_inference.paths import dataset_path, metadata_path, relationship_path
 from pgm_llm_inference.analysis.structure import (

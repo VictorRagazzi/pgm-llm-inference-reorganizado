@@ -11,11 +11,11 @@ from pgmpy.sampling import BayesianModelSampling
 from sklearn.metrics import accuracy_score, f1_score
 
 # Imports do seu projeto
-from pgm_llm_inference.experiment.experiment import run_max_product
+from pgm_llm_inference.inference.engine import run_max_product
 from pgm_llm_inference.experiment.config import ExperimentConfig
 from pgm_llm_inference.mpe.cache import load_or_compile
 from pgm_llm_inference.mpe import infer_from_compiled, CompiledSemanticMessages
-from pgm_llm_inference.experiment.llm_factory import build_llm_fn, get_model_name
+from pgm_llm_inference.llm.providers import build_llm_fn, get_model_name
 from pgm_llm_inference.io.loaders import load_network
 from pgm_llm_inference.paths import dataset_path, metadata_path, relationship_path
 

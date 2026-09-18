@@ -3,7 +3,7 @@ mpe/graph.py
 ============
 Operações puras sobre o grafo DAG do pipeline MPE.
 
-Todas as funções recebem BayesianNetwork de mpe/types.py (com .variables e
+Todas as funções recebem BayesianNetwork de models/ (com .variables e
 .parents) e retornam estruturas simples (sets, tuples, listas, dicts).
 Sem dependências de LLM ou I/O.
 """

@@ -15,7 +15,7 @@ from pgm_llm_inference.mpe.compile import (
     COMPILED_SCHEMA_VERSION,
     CompiledSemanticMessages,
 )
-from pgm_llm_inference.mpe.io import normalize_assignment
+from pgm_llm_inference.mpe.normalization import normalize_assignment
 from pgm_llm_inference.mpe.types import DecisionTokenScores
 from pgm_llm_inference.paths import COMPILED_TABLES_DIR
 

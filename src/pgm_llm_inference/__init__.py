@@ -10,7 +10,7 @@ __version__ = "0.1.0"
 
 from .models import Variable, Factor, BayesianNetwork
 from .core.config import InferenceConfig
-from .strategies import (
+from .inference.strategies import (
     EliminationStrategy,
     SumProductStrategy,
     MaxProductStrategy,

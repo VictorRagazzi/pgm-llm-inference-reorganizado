@@ -6,7 +6,7 @@ prevista pelo LLM, verifica consistência com seu Markov Blanket e corrige
 predições que destoam sistematicamente do que o blanket sugere (ex.: viés
 para valores "neutros"/centrais do domínio).
 
-Lê um arquivo de log .jsonl (gerado por logging/experiment_logger.py),
+Lê um arquivo de log .jsonl (gerado por experiment/logging.py),
 roda uma segunda passada de verificação via LLM, e escreve um novo log
 "<nome>_re.jsonl" com as predições corrigidas.
 
@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from pgm_llm_inference.models import BayesianNetwork
 from pgm_llm_inference.core.config import InferenceConfig
 from pgm_llm_inference.io.loaders import load_network
-from pgm_llm_inference.experiment.llm_factory import build_llm_fn
+from pgm_llm_inference.llm.providers import build_llm_fn
 from pgm_llm_inference.paths import DATASETS_DIR
 
 config = InferenceConfig()
